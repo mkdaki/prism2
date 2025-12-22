@@ -1,0 +1,85 @@
+# docker-compose.yml
+# 3サービス構成（frontend / backend / db）の責務境界をComposeで担保する構成です。:contentReference[oaicite:0]{index=0}
+
+services:
+  db:
+    image: postgres:16
+    container_name: prism-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-prism}
+      POSTGRES_USER: ${POSTGRES_USER:-prism}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prism_password}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 初期化SQLを置く場合（任意）
+      # - ./db/init:/docker-entrypoint-initdb.d:ro
+    # PoCでも "dbは外部公開しない" を基本にします（境界ルール）:contentReference[oaicite:1]{index=1}
+    # どうしてもホストからDB接続したい場合のみ、下のportsを有効化してください。
+    # ports:
+    #   - "5433:5432"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: prism-backend
+    restart: unless-stopped
+    environment:
+      # backend -> db はサービス名で接続（IP固定しない）:contentReference[oaicite:2]{index=2}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-prism}:${POSTGRES_PASSWORD:-prism_password}@db:5432/${POSTGRES_DB:-prism}
+      # 必要に応じてアプリ側の環境変数を追加
+      # APP_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # ホスト側は指定ポート（8001）、コンテナ内部はFastAPI標準（8000）を維持
+      - "8001:8000"
+    networks:
+      - internal
+      - public
+    healthcheck:
+      # /health を実装する前提（未実装なら一旦コメントアウトしてください）
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read(); print('ok')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: prism-frontend
+    restart: unless-stopped
+    environment:
+      # 開発時：ブラウザからはホストの 8001 を叩くのが最もシンプルです
+      # （本番やリバプロ導入時は見直し対象）
+      VITE_API_BASE_URL: http://localhost:8001
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      # ホスト側は指定ポート（3001）、コンテナ内部はフロント開発サーバ（例：3000）想定
+      - "3001:3000"
+    networks:
+      - public
+
+volumes:
+  pgdata:
+
+networks:
+  # 外部公開（ブラウザアクセス／API公開）
+  public:
+    driver: bridge
+  # 内部専用（backend<->db）
+  internal:
+    driver: bridge
+    internal: true
