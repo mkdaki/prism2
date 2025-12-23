@@ -220,3 +220,39 @@ playwright-report/
 playwright/.cache/
 playwright-report.zip
 test-results/
+
+# Frontend (Node.js / Vite)
+frontend/node_modules/
+frontend/.vite/
+
+# build outputs (explicit; "dist/" is already ignored above, but keep frontend-specific too)
+frontend/dist/
+frontend/build/
+
+# test/coverage outputs
+frontend/coverage/
+
+# logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# caches
+frontend/.eslintcache
+frontend/.parcel-cache/
+frontend/.turbo/
+frontend/.cache/
+frontend/.pnpm-store/
+frontend/.pnp.*
+
+# frameworks (in case you add them later)
+frontend/.next/
+frontend/.nuxt/
+frontend/.svelte-kit/
+frontend/storybook-static/
+
+# local env files (keep example file tracked if you use it)
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
