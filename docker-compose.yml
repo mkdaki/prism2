@@ -34,7 +34,8 @@ services:
     restart: unless-stopped
     environment:
       # backend -> db はサービス名で接続（IP固定しない）:contentReference[oaicite:2]{index=2}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-prism}:${POSTGRES_PASSWORD:-prism_password}@db:5432/${POSTGRES_DB:-prism}
+      # SQLAlchemy が psycopg(v3) を使うよう driver を明示（psycopg2不要）
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-prism}:${POSTGRES_PASSWORD:-prism_password}@db:5432/${POSTGRES_DB:-prism}
       # 必要に応じてアプリ側の環境変数を追加
       # APP_ENV: development
     depends_on:
