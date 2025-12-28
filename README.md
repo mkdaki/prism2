@@ -1,0 +1,59 @@
+## Prism
+
+Docker Compose で **frontend（React + Vite）/ backend（FastAPI）/ db（PostgreSQL）** をまとめて起動する PoC 構成です。
+
+## プロジェクト現状（箇条書き）
+2025/12/28時点
+- **全体構成**
+    - **3サービス構成**：`frontend`（React+Vite）/ `backend`（FastAPI）/ `db`（PostgreSQL）を `docker-compose.yml` で起動する設計
+    - **ディレクトリ**：`backend/`, `frontend/`, `db/`（現状は空ディレクトリ）
+
+- **Docker / Compose**
+    - **DB**
+        - `postgres:16`
+        - データは名前付きボリューム `pgdata` に永続化
+        - **DBポートはデフォルトでホスト公開しない**（必要なら `docker-compose.yml` の `ports` をコメント解除して利用）
+    - **Backend**
+        - `./backend/Dockerfile` でビルド
+        - ホスト `8001` → コンテナ `8000` に公開
+        - DB接続は `DATABASE_URL=postgresql+psycopg://...@db:5432/...`（Compose の環境変数で注入）
+        - ヘルスチェック：`http://localhost:8000/health` を叩く設定
+    - **Frontend**
+        - `./frontend/Dockerfile` でビルド
+        - ホスト `3001` → コンテナ `3000` に公開
+        - 環境変数 `VITE_API_BASE_URL=http://localhost:8001`
+
+- **Backend（FastAPI / SQLAlchemy）**
+    - **依存**：`fastapi`, `uvicorn`, `python-multipart`, `SQLAlchemy 2.x`, `psycopg3`（`backend/requirements.txt`）
+    - **起動時の挙動**：`Base.metadata.create_all(bind=engine)` で **PoCとして自動テーブル作成**（マイグレーションは未導入）
+    - **API**
+        - `GET /health`：`{"status":"ok"}`
+        - `POST /datasets/upload`：CSV（UTF-8前提）を受け取り、`csv.DictReader` で読み込み→DBに保存して `dataset_id` と行数を返す
+    - **DBモデル**（`backend/app/models.py`）
+        - `datasets`：`id`, `filename`, `created_at`
+        - `dataset_rows`：`id`, `dataset_id`（CASCADE）, `row_index`, `data`（PostgreSQL `JSONB`）, `created_at`
+    - **DB接続**（`backend/app/db.py`）：環境変数 `DATABASE_URL` 必須、`SessionLocal` を用意
+
+- **Frontend（React + Vite + TypeScript）**
+    - **依存**：React 18 / Vite 5 / TypeScript 5（最小構成）
+    - **画面**：`Prism Frontend` と `It works.` を表示するだけ（API呼び出し等は未実装）
+    - **設定**：Vite dev server は `0.0.0.0:3000`（Docker前提）
+
+- **Git管理上の状態（.gitignore）**
+    - `frontend/node_modules/` は ignore 対象（ただし作業ツリー上には `frontend/node_modules/` ディレクトリが存在）
+
+## 起動手順（具体的）
+
+リポジトリ直下で以下を実行します。
+
+```bash
+docker compose up --build
+```
+
+## 動作確認
+
+- **Backend**
+    - `http://localhost:8001/health`
+- **Frontend**
+    - `http://localhost:3001/`
+
