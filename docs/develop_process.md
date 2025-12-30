@@ -6,10 +6,18 @@
 
 ### A-0. 品質・土台（先に整備）
 
-* [ ] CORS を設定（例：`http://localhost:3001` を許可。許可オリジンは環境変数で切替できるようにする）
-* [ ] テスト基盤を追加（`pytest` / FastAPI TestClient / カバレッジ計測）
-* [ ] CI を追加（Backend のテスト + coverage 80%以上、Frontend の build を実行）
-* [ ] Alembic を導入し、起動時 `create_all` 依存を解消する方針を決める（フェーズAでは「方針決定」まででも可）
+* [ ] A-0-1. CORS を設定
+    * [ ] 例：`http://localhost:3001` を許可
+    * [ ] 許可オリジンは環境変数で切替できるようにする
+* [ ] A-0-2. テスト基盤を追加
+    * [ ] `pytest` / FastAPI TestClient
+    * [ ] カバレッジ計測（80%以上を維持）
+* [ ] A-0-3. CI を追加
+    * [ ] Backend：テスト + coverage 80%以上
+    * [ ] Frontend：build を実行
+* [ ] A-0-4. Alembic 方針決定
+    * [ ] Alembic を導入し、起動時 `create_all` 依存を解消する方針を決める
+    * [ ] フェーズAでは「方針決定」まででも可（導入作業はフェーズBに寄せても良い）
 
 ---
 
