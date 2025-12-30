@@ -57,3 +57,5 @@ docker compose up --build
 - **Frontend**
     - `http://localhost:3001/`
 
+## 開発方針（重要）
+- ローカルPCのPython環境を汚さないため、Pythonの依存導入・テストは backend コンテナ内で完結させます。
