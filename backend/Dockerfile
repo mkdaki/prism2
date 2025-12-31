@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 
 WORKDIR /app
+ENV PYTHONPATH=/app
 
 # 依存関係
 COPY requirements.txt .
@@ -8,6 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # アプリ
 COPY app ./app
+COPY tests ./tests
+COPY pytest.ini ./pytest.ini
 
 EXPOSE 8000
 

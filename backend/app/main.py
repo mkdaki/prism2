@@ -23,8 +23,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# PoC：起動時にテーブルが無ければ作る（後でAlembicに置き換え可能）
-Base.metadata.create_all(bind=engine)
+@app.on_event("startup")
+def createDatabaseTables():
+    """目的: PoCとして、起動時にテーブルが無ければ作成する（将来的にAlembicへ置換予定）。"""
+    Base.metadata.create_all(bind=engine)
 
 @app.get("/health")
 def health():
