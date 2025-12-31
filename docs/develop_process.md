@@ -21,10 +21,10 @@
 * [x] A-0-1. CORS を設定
     * [x] 例：`http://localhost:3001` を許可
     * [x] 許可オリジンは環境変数で切替できるようにする
-* [ ] A-0-2. テスト基盤を追加
-    * [ ] `pytest` / FastAPI TestClient
-    * [ ] カバレッジ計測（80%以上を維持）
-    * [ ] テストは backend コンテナ内で実行する（ローカルPCへpytest等を導入しない）
+* [x] A-0-2. テスト基盤を追加
+    * [x] `pytest` / FastAPI TestClient
+    * [x] カバレッジ計測（80%以上を維持）
+    * [x] テストは backend コンテナ内で実行する（ローカルPCへpytest等を導入しない）
 
 * [ ] A-0-3. CI を追加
     * [ ] Backend：テスト + coverage 80%以上

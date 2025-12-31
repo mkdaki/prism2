@@ -50,6 +50,18 @@ Docker Compose で **frontend（React + Vite）/ backend（FastAPI）/ db（Post
 docker compose up --build
 ```
 
+## テスト手順（重要：ローカルPCのPython環境は使わない）
+
+このプロジェクトは「ローカル環境を汚さない」方針のため、pytestは **backendコンテナ内** で実行します。
+
+```bash
+# DBを起動（テストでDBを利用するため）
+docker compose up -d db
+
+# backendを使い捨てで起動してpytest実行（終了後にコンテナは自動削除）
+docker compose run --rm backend pytest
+```
+
 ## 動作確認
 
 - **Backend**
