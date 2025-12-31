@@ -26,9 +26,9 @@
     * [x] カバレッジ計測（80%以上を維持）
     * [x] テストは backend コンテナ内で実行する（ローカルPCへpytest等を導入しない）
 
-* [ ] A-0-3. CI を追加
-    * [ ] Backend：テスト + coverage 80%以上
-    * [ ] Frontend：build を実行
+* [x] A-0-3. CI を追加
+    * [x] Backend：テスト + coverage 80%以上
+    * [x] Frontend：build を実行
 * [ ] A-0-4. Alembic 方針決定
     * [ ] Alembic を導入し、起動時 `create_all` 依存を解消する方針を決める
     * [ ] フェーズAでは「方針決定」まででも可（導入作業はフェーズBに寄せても良い）
