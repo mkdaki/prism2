@@ -29,9 +29,17 @@
 * [x] A-0-3. CI を追加
     * [x] Backend：テスト + coverage 80%以上
     * [x] Frontend：build を実行
-* [ ] A-0-4. Alembic 方針決定
-    * [ ] Alembic を導入し、起動時 `create_all` 依存を解消する方針を決める
-    * [ ] フェーズAでは「方針決定」まででも可（導入作業はフェーズBに寄せても良い）
+* [x] A-0-4. Alembic 方針決定
+    * [x] Alembic を導入し、起動時 `create_all` 依存を解消する方針を決める
+    * [x] フェーズAでは「方針決定」まででも可（導入作業はフェーズBに寄せても良い）
+
+#### A-0-4. Alembic 方針決定（決定事項）
+
+- DBスキーマ管理は Alembic を正式採用する。
+- フェーズAでは Alembic を導入せず、フェーズB-0で初期マイグレーションを作成する。
+- フェーズB-0以降は Alembic を DB スキーマ管理の唯一の正とする。
+- それに伴い、起動時の `Base.metadata.create_all(...)` は B-0 完了時に削除し、
+  DB 作成・更新は `alembic upgrade head` に統一する。
 
 ---
 
