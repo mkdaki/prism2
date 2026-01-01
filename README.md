@@ -70,4 +70,12 @@ docker compose run --rm backend pytest
     - `http://localhost:3001/`
 
 ## 開発方針（重要）
+
 - ローカルPCのPython環境を汚さないため、Pythonの依存導入・テストは backend コンテナ内で完結させます。
+
+## DBスキーマ管理について（PoC方針）
+
+本プロジェクトでは、DBスキーマ管理に Alembic を採用する方針としています。
+PoC初期（フェーズA）では `create_all` による暫定対応を行い、
+フェーズB以降は Alembic によるマイグレーション管理へ移行します。
+詳細は `docs/develop_process.md` を参照してください。
