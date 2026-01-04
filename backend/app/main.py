@@ -3,6 +3,7 @@ import io
 import os
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from .db import SessionLocal, engine
@@ -32,6 +33,39 @@ def createDatabaseTables():
 def health():
     """目的: 稼働確認用のヘルスチェック結果を返す。"""
     return {"status": "ok"}
+
+@app.get("/datasets")
+def listDatasets():
+    """目的: データセット一覧（行数付き）を返す。"""
+    db = SessionLocal()
+    try:
+        statement = (
+            select(
+                Dataset.id.label("dataset_id"),
+                Dataset.filename,
+                Dataset.created_at,
+                func.count(DatasetRow.id).label("rows"),
+            )
+            .select_from(Dataset)
+            .outerjoin(DatasetRow, DatasetRow.dataset_id == Dataset.id)
+            .group_by(Dataset.id, Dataset.filename, Dataset.created_at)
+            .order_by(Dataset.id.asc())
+        )
+
+        results = db.execute(statement).all()
+        return [
+            {
+                "dataset_id": row.dataset_id,
+                "filename": row.filename,
+                "created_at": row.created_at,
+                "rows": row.rows,
+            }
+            for row in results
+        ]
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
+    finally:
+        db.close()
 
 @app.post("/datasets/upload")
 async def upload_dataset(file: UploadFile = File(...)):
