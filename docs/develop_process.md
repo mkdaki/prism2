@@ -45,17 +45,17 @@
 
 ### A-1. データセット一覧取得 API
 
-* [ ] `GET /datasets` エンドポイントを実装
-* [ ] `datasets` テーブルから一覧取得
-* [ ] 各 dataset について以下を返却
+* [x] `GET /datasets` エンドポイントを実装
+* [x] `datasets` テーブルから一覧取得
+* [x] 各 dataset について以下を返却
 
-  * [ ] dataset_id
-  * [ ] filename
-  * [ ] created_at
-  * [ ] 行数（`dataset_rows` の COUNT）
-* [ ] レスポンス形式を JSON として確定
-* [ ] Swagger（/docs）で確認
-* [ ] ユニットテストを追加（正常系：0件/複数件、行数COUNTが返ること）
+  * [x] dataset_id
+  * [x] filename
+  * [x] created_at
+  * [x] 行数（`dataset_rows` の COUNT）
+* [x] レスポンス形式を JSON として確定
+* [x] Swagger（/docs）で確認
+* [x] ユニットテストを追加（正常系：0件/複数件、行数COUNTが返ること）
 
 ---
 
