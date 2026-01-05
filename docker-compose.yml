@@ -36,6 +36,8 @@ services:
       # backend -> db はサービス名で接続（IP固定しない）:contentReference[oaicite:2]{index=2}
       # SQLAlchemy が psycopg(v3) を使うよう driver を明示（psycopg2不要）
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-prism}:${POSTGRES_PASSWORD:-prism_password}@db:5432/${POSTGRES_DB:-prism}
+      # PoC: backend起動時に自動でalembic upgrade headを実行する（後でOFF可能）
+      RUN_MIGRATIONS: "1"
       # ブラウザアクセス用CORS許可オリジン（localhost と 127.0.0.1 の両方を許可）
       CORS_ALLOW_ORIGINS: http://localhost:3001,http://127.0.0.1:3001
       # 必要に応じてアプリ側の環境変数を追加
