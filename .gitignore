@@ -256,3 +256,5 @@ frontend/storybook-static/
 frontend/.env
 frontend/.env.*
 !frontend/.env.example
+
+sample*.csv
