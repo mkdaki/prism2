@@ -11,6 +11,9 @@ from .models import Base, Dataset, DatasetRow
 
 app = FastAPI(title="Prism Backend", version="0.1.0")
 
+# A-2: データセット詳細で返すサンプル行数（固定）
+SAMPLE_ROWS_LIMIT = 10
+
 # CORS（ブラウザアクセス向け）
 # 例: "http://localhost:3001,http://127.0.0.1:3001" のようにカンマ区切り
 originsEnv = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3001")
@@ -62,6 +65,47 @@ def listDatasets():
             }
             for row in results
         ]
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
+    finally:
+        db.close()
+
+@app.get("/datasets/{dataset_id}")
+def getDatasetDetail(dataset_id: int):
+    """目的: 指定データセットのメタ情報・行数・先頭N行サンプルを返す。"""
+    db = SessionLocal()
+    try:
+        datasetStatement = (
+            select(Dataset.id, Dataset.filename, Dataset.created_at)
+            .where(Dataset.id == dataset_id)
+        )
+        datasetRow = db.execute(datasetStatement).first()
+        if datasetRow is None:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        rowsStatement = (
+            select(func.count(DatasetRow.id))
+            .select_from(DatasetRow)
+            .where(DatasetRow.dataset_id == dataset_id)
+        )
+        totalRows = db.execute(rowsStatement).scalar_one()
+
+        samplesStatement = (
+            select(DatasetRow.row_index, DatasetRow.data)
+            .select_from(DatasetRow)
+            .where(DatasetRow.dataset_id == dataset_id)
+            .order_by(DatasetRow.row_index.asc())
+            .limit(SAMPLE_ROWS_LIMIT)
+        )
+        sampleRows = db.execute(samplesStatement).all()
+
+        return {
+            "dataset_id": datasetRow.id,
+            "filename": datasetRow.filename,
+            "created_at": datasetRow.created_at,
+            "rows": totalRows,
+            "samples": [{"row_index": r.row_index, "data": r.data} for r in sampleRows],
+        }
     except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
     finally:
