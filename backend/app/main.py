@@ -16,7 +16,7 @@ SAMPLE_ROWS_LIMIT = 10
 
 # CORS（ブラウザアクセス向け）
 # 例: "http://localhost:3001,http://127.0.0.1:3001" のようにカンマ区切り
-originsEnv = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3001")
+originsEnv = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3001,http://127.0.0.1:3001")
 allowOrigins = [o.strip() for o in originsEnv.split(",") if o.strip()]
 
 app.add_middleware(
