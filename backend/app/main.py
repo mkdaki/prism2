@@ -6,8 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from .db import SessionLocal, engine
-from .models import Base, Dataset, DatasetRow
+from .db import SessionLocal
+from .models import Dataset, DatasetRow
 
 app = FastAPI(title="Prism Backend", version="0.1.0")
 
@@ -26,11 +26,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("startup")
-def createDatabaseTables():
-    """目的: PoCとして、起動時にテーブルが無ければ作成する（将来的にAlembicへ置換予定）。"""
-    Base.metadata.create_all(bind=engine)
 
 @app.get("/health")
 def health():

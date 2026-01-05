@@ -95,9 +95,28 @@
 
 ### B-0. 品質・土台（分析機能の前に）
 
-* [ ] Alembic を導入し、初期マイグレーションを作成（`datasets` / `dataset_rows`）
-* [ ] 起動時の `create_all` を削除（DBスキーマはマイグレーションで管理）
-* [ ] CI にマイグレーション適用（例：テストDBに `alembic upgrade head`）を組み込む
+* [x] Alembic を導入し、初期マイグレーションを作成（`datasets` / `dataset_rows`）
+* [x] 起動時の `create_all` を削除（DBスキーマはマイグレーションで管理）
+* [x] CI にマイグレーション適用（例：テストDBに `alembic upgrade head`）を組み込む
+
+#### B-0 補足：開発用DBとテスト用DBを分離する（推奨）
+
+pytest はテストの独立性のため、テスト後に対象テーブルを TRUNCATE します。
+開発用DBのデータ永続化（本番相当データでの検証）と両立するため、Composeプロジェクト名を分けてテスト専用DBを使います。
+
+```bash
+# テスト用DBを起動（開発用とは別のボリューム/ネットワーク）
+docker compose -p prism2-test up -d db
+
+# スキーマ適用（entrypointの自動migrationはOFFにして明示的に）
+docker compose -p prism2-test run --rm -e RUN_MIGRATIONS=0 backend alembic upgrade head
+
+# テスト実行
+docker compose -p prism2-test run --rm -e RUN_MIGRATIONS=0 backend pytest
+
+# 片付け（テスト用DBだけ破棄）
+docker compose -p prism2-test down -v
+```
 
 ---
 

@@ -15,6 +15,7 @@ jobs:
       POSTGRES_DB: prism
       POSTGRES_USER: prism
       POSTGRES_PASSWORD: prism_password
+      COMPOSE_PROJECT_NAME: prism2-ci
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,8 +46,11 @@ jobs:
           docker compose logs db
           exit 1
 
+      - name: Run alembic upgrade head (explicit)
+        run: docker compose run --rm -e RUN_MIGRATIONS=0 backend alembic upgrade head
+
       - name: Run pytest (in backend container) with coverage gate
-        run: docker compose run --rm backend pytest
+        run: docker compose run --rm -e RUN_MIGRATIONS=0 backend pytest
 
       - name: Cleanup
         if: always()

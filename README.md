@@ -25,7 +25,7 @@ Docker Compose で **frontend（React + Vite）/ backend（FastAPI）/ db（Post
 
 - **Backend（FastAPI / SQLAlchemy）**
     - **依存**：`fastapi`, `uvicorn`, `python-multipart`, `SQLAlchemy 2.x`, `psycopg3`（`backend/requirements.txt`）
-    - **起動時の挙動**：`Base.metadata.create_all(bind=engine)` で **PoCとして自動テーブル作成**（マイグレーションは未導入）
+    - **起動時の挙動**：PoCとして **起動時に Alembic（`alembic upgrade head`）を自動実行**してスキーマを最新化（後でOFF可能）
     - **API**
         - `GET /health`：`{"status":"ok"}`
         - `POST /datasets/upload`：CSV（UTF-8前提）を受け取り、`csv.DictReader` で読み込み→DBに保存して `dataset_id` と行数を返す
@@ -55,12 +55,44 @@ docker compose up --build
 このプロジェクトは「ローカル環境を汚さない」方針のため、pytestは **backendコンテナ内** で実行します。
 
 ```bash
-# DBを起動（テストでDBを利用するため）
-docker compose up -d db
+# テストはDBをTRUNCATEするため、開発用DB（pgdata）とは分離して実行する
+# -p prism2-test を付けることで、DB/ネットワーク/ボリュームが別管理になる
 
-# backendを使い捨てで起動してpytest実行（終了後にコンテナは自動削除）
-docker compose run --rm backend pytest
+# テスト用DBを起動
+docker compose -p prism2-test up -d db
+
+# スキーマを適用（entrypoint側の自動migrationはOFFにして明示的に実行）
+docker compose -p prism2-test run --rm -e RUN_MIGRATIONS=0 backend alembic upgrade head
+
+# pytest実行（終了後にbackendコンテナは自動削除）
+docker compose -p prism2-test run --rm -e RUN_MIGRATIONS=0 backend pytest
+
+# 片付け（テスト用DBは捨てる）
+docker compose -p prism2-test down -v
 ```
+
+## マイグレーション（Alembic）
+
+### 適用（PoCデフォルト：起動時に自動適用）
+
+backend コンテナはデフォルトで `RUN_MIGRATIONS=1` のため、起動時に `alembic upgrade head` を実行します。
+後で本番寄りにしたい場合は `RUN_MIGRATIONS=0` にして、以下のように手動で適用できます。
+
+```bash
+docker compose up -d db
+docker compose run --rm -e RUN_MIGRATIONS=0 backend alembic upgrade head
+```
+
+### リビジョン作成（例）
+
+```bash
+docker compose run --rm -e RUN_MIGRATIONS=0 backend alembic revision --autogenerate -m "change schema"
+```
+
+### 注意（既存の永続ボリュームを使っている場合）
+
+PoCで `pgdata` に過去スキーマが残っていると、初期マイグレーションと衝突することがあります。
+その場合は一度 `docker compose down -v` でボリュームを作り直してください（データは消えます）。
 
 ## 動作確認
 
@@ -76,6 +108,5 @@ docker compose run --rm backend pytest
 ## DBスキーマ管理について（PoC方針）
 
 本プロジェクトでは、DBスキーマ管理に Alembic を採用する方針としています。
-PoC初期（フェーズA）では `create_all` による暫定対応を行い、
-フェーズB以降は Alembic によるマイグレーション管理へ移行します。
+現状は Alembic によるマイグレーション管理へ移行済みです。
 詳細は `docs/develop_process.md` を参照してください。
