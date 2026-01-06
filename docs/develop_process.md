@@ -202,11 +202,11 @@ docker compose -p prism2-test down -v
 
 #### B-2-0. 最小の土台（LLM なしで形を固める）
 
-* [ ] `GET /datasets/{dataset_id}/analysis` を追加
-* [ ] 内部で B-1 の集計結果を取得できるようにする（処理の共有/再利用）
-* [ ] 返却 JSON の形を確定（例：`dataset_id` / `generated_at` / `analysis_text`）
-* [ ] まずは固定文言 + stats の要点だけでレスポンスが返る（LLM未接続でもUIが作れる状態）
-* [ ] ユニットテスト：正常系（存在する dataset_id）、異常系（存在しない dataset_id は 404）
+* [x] `GET /datasets/{dataset_id}/analysis` を追加
+* [x] 内部で B-1 の集計結果を取得できるようにする（処理の共有/再利用）
+* [x] 返却 JSON の形を確定（例：`dataset_id` / `generated_at` / `analysis_text`）
+* [x] まずは固定文言 + stats の要点だけでレスポンスが返る（LLM未接続でもUIが作れる状態）
+* [x] ユニットテスト：正常系（存在する dataset_id）、異常系（存在しない dataset_id は 404）
 
 #### B-2-1. LLM クライアントの抽象化（テスト容易性）
 
@@ -232,6 +232,12 @@ docker compose -p prism2-test down -v
 * [ ] 代表データ（想定利用に近い CSV）で B-1 stats → B-2 出力を確認し、改善点をメモする
     * [ ] 例：Playwright スクレイピング結果の列を含む CSV
     * [ ] 注意：**機密/個人情報が含まれる場合はコミットしない**（匿名化したサンプルのみリポジトリに入れる）
+    * [ ] 代表CSVの置き場所：`samples/playwright_scrape_sample.csv`（必要に応じて更新）
+    * [ ] 手順（最小）：
+        * [ ] CSV をアップロードして dataset_id を得る
+        * [ ] `GET /datasets/{dataset_id}/stats` を確認（入力が想定通りか）
+        * [ ] `GET /datasets/{dataset_id}/analysis` を確認（出力の妥当性/言い回し/過度な断定がないか）
+        * [ ] 改善点をメモし、B-2-2 のプロンプトと B-2-3 のエラーハンドリングへ反映する
 
 #### B-2 Done（最小）
 
