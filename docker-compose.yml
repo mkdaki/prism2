@@ -4,7 +4,6 @@
 services:
   db:
     image: postgres:16
-    container_name: prism-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-prism}
@@ -30,7 +29,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: prism-backend
     restart: unless-stopped
     environment:
       # backend -> db はサービス名で接続（IP固定しない）:contentReference[oaicite:2]{index=2}
@@ -62,7 +60,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: prism-frontend
     restart: unless-stopped
     environment:
       # 開発時：ブラウザからはホストの 8001 を叩くのが最もシンプルです
