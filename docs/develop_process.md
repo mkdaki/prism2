@@ -1,6 +1,6 @@
 # Prism PoC 実装タスクチェックリスト
 
-（2025/12/30 更新）
+（2026/01/06 更新）
 ## 開発方針：ローカル環境を汚さない（テストはコンテナ内で完結）
 
 本プロジェクトは Windows11 + Docker Desktop を前提とし、ローカルPCのPython環境（グローバル/venv）を汚さない方針とする。
@@ -122,17 +122,68 @@ docker compose -p prism2-test down -v
 
 ### B-1. 最小集計（統計）API
 
-* [ ] `GET /datasets/{dataset_id}/stats` を実装
-* [ ] 対象 dataset の行数を算出
-* [ ] JSONB からカラム一覧を抽出
-* [ ] 数値カラムについて以下を算出（可能な範囲で）
+* [x] `GET /datasets/{dataset_id}/stats` を実装
+* [x] 対象 dataset の行数を算出
+* [x] JSONB からカラム一覧を抽出
+* [x] 数値カラムについて以下を算出（可能な範囲で）
 
-  * [ ] min
-  * [ ] max
-  * [ ] avg
-* [ ] 集計結果を JSON で返却
-* [ ] 計算不可カラムは除外（PoC割り切り）
-* [ ] ユニットテストを追加（数値/非数値/欠損の混在を含む最低限のパターン）
+  * [x] min
+  * [x] max
+  * [x] avg
+* [x] 集計結果を JSON で返却
+* [x] 計算不可カラムは除外（PoC割り切り）
+* [x] 文字列カラムも要約対象に含める（例：案件名）
+    * [x] カラムごとに kind（`number` / `string` / `mixed` / `empty`）を返す
+    * [x] `string` / `mixed` は上位頻出値（top values）を返す
+* [x] ユニットテストを追加（数値/非数値/欠損の混在を含む最低限のパターン）
+
+#### B-1 レスポンス例（参考）
+
+以下は `GET /datasets/{dataset_id}/stats` のレスポンス例です（例示のため一部省略）。
+
+```json
+{
+  "dataset_id": 1,
+  "rows": 4,
+  "columns": [
+    {
+      "name": "project",
+      "kind": "string",
+      "present_count": 4,
+      "non_empty_count": 3,
+      "numeric": null,
+      "top_values": [
+        { "value": "案件A", "count": 2 },
+        { "value": "案件B", "count": 1 }
+      ]
+    },
+    {
+      "name": "amount",
+      "kind": "number",
+      "present_count": 4,
+      "non_empty_count": 3,
+      "numeric": { "count": 3, "min": 100.0, "max": 300.0, "avg": 200.0 },
+      "top_values": null
+    },
+    {
+      "name": "mixed",
+      "kind": "mixed",
+      "present_count": 4,
+      "non_empty_count": 4,
+      "numeric": { "count": 3, "min": 1.0, "max": 3.0, "avg": 2.0 },
+      "top_values": [{ "value": "x", "count": 1 }]
+    },
+    {
+      "name": "empty",
+      "kind": "empty",
+      "present_count": 4,
+      "non_empty_count": 0,
+      "numeric": null,
+      "top_values": null
+    }
+  ]
+}
+```
 
 ---
 

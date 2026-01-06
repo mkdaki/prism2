@@ -3,7 +3,7 @@ import io
 import os
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from .db import SessionLocal
@@ -13,6 +13,13 @@ app = FastAPI(title="Prism Backend", version="0.1.0")
 
 # A-2: データセット詳細で返すサンプル行数（固定）
 SAMPLE_ROWS_LIMIT = 10
+
+# B-1: statsで文字列カラムの上位値を返す件数（固定）
+STRING_TOP_VALUES_LIMIT = 5
+
+# B-1: 数値判定（CSV取り込み値は基本文字列のため、数値として扱えるものだけ集計）
+# 例: "1", "-1", "1.2", ".5", "1e3", "-1.2E-3"
+NUMERIC_REGEX = r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$"
 
 # CORS（ブラウザアクセス向け）
 # 例: "http://localhost:3001,http://127.0.0.1:3001" のようにカンマ区切り
@@ -101,6 +108,130 @@ def getDatasetDetail(dataset_id: int):
             "rows": totalRows,
             "samples": [{"row_index": r.row_index, "data": r.data} for r in sampleRows],
         }
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
+    finally:
+        db.close()
+
+@app.get("/datasets/{dataset_id}/stats")
+def getDatasetStats(dataset_id: int):
+    """目的: 指定データセットの行数・カラム一覧・各カラムの簡易要約（数値/文字列/混在）を返す。"""
+    db = SessionLocal()
+    try:
+        # 1) dataset存在チェック
+        datasetStatement = select(Dataset.id).where(Dataset.id == dataset_id)
+        datasetRow = db.execute(datasetStatement).first()
+        if datasetRow is None:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        # 2) 行数
+        rowsStatement = (
+            select(func.count(DatasetRow.id))
+            .select_from(DatasetRow)
+            .where(DatasetRow.dataset_id == dataset_id)
+        )
+        totalRows = db.execute(rowsStatement).scalar_one()
+
+        # 3) カラム一覧（JSONBキーのdistinct）
+        columnsStatement = text(
+            """
+            SELECT DISTINCT jsonb_object_keys(data) AS col
+            FROM dataset_rows
+            WHERE dataset_id = :dataset_id
+            ORDER BY col ASC
+            """
+        )
+        columnRows = db.execute(columnsStatement, {"dataset_id": dataset_id}).all()
+        columns = [r.col for r in columnRows]
+
+        # 4) 各カラムの要約
+        results = []
+        for col in columns:
+            summaryStatement = text(
+                """
+                WITH extracted AS (
+                  SELECT
+                    (data ? :col) AS present,
+                    nullif(btrim(data ->> :col), '') AS v
+                  FROM dataset_rows
+                  WHERE dataset_id = :dataset_id
+                )
+                SELECT
+                  count(*) FILTER (WHERE present) AS present_count,
+                  count(*) FILTER (WHERE v IS NOT NULL) AS non_empty_count,
+                  count(*) FILTER (WHERE v ~ :numeric_regex) AS numeric_count,
+                  min(CASE WHEN v ~ :numeric_regex THEN v::double precision END) AS min,
+                  max(CASE WHEN v ~ :numeric_regex THEN v::double precision END) AS max,
+                  avg(CASE WHEN v ~ :numeric_regex THEN v::double precision END) AS avg
+                FROM extracted
+                """
+            )
+            summary = db.execute(
+                summaryStatement,
+                {"dataset_id": dataset_id, "col": col, "numeric_regex": NUMERIC_REGEX},
+            ).mappings().one()
+
+            presentCount = int(summary["present_count"] or 0)
+            nonEmptyCount = int(summary["non_empty_count"] or 0)
+            numericCount = int(summary["numeric_count"] or 0)
+
+            if nonEmptyCount == 0:
+                kind = "empty"
+            elif numericCount == nonEmptyCount:
+                kind = "number"
+            elif numericCount == 0:
+                kind = "string"
+            else:
+                kind = "mixed"
+
+            item = {
+                "name": col,
+                "kind": kind,
+                "present_count": presentCount,
+                "non_empty_count": nonEmptyCount,
+                "numeric": {
+                    "count": numericCount,
+                    "min": summary["min"],
+                    "max": summary["max"],
+                    "avg": summary["avg"],
+                }
+                if numericCount > 0
+                else None,
+                "top_values": None,
+            }
+
+            # 文字列（および混在）の場合は、非数値の上位頻出値を返す
+            if kind in ("string", "mixed"):
+                topValuesStatement = text(
+                    """
+                    WITH extracted AS (
+                      SELECT nullif(btrim(data ->> :col), '') AS v
+                      FROM dataset_rows
+                      WHERE dataset_id = :dataset_id
+                    )
+                    SELECT v AS value, count(*) AS count
+                    FROM extracted
+                    WHERE v IS NOT NULL
+                      AND NOT (v ~ :numeric_regex)
+                    GROUP BY v
+                    ORDER BY count DESC, v ASC
+                    LIMIT :limit
+                    """
+                )
+                topRows = db.execute(
+                    topValuesStatement,
+                    {
+                        "dataset_id": dataset_id,
+                        "col": col,
+                        "numeric_regex": NUMERIC_REGEX,
+                        "limit": STRING_TOP_VALUES_LIMIT,
+                    },
+                ).all()
+                item["top_values"] = [{"value": r.value, "count": int(r.count)} for r in topRows]
+
+            results.append(item)
+
+        return {"dataset_id": dataset_id, "rows": totalRows, "columns": results}
     except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
     finally:
