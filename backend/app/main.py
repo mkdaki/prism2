@@ -2,12 +2,16 @@ import csv
 import io
 import os
 from datetime import datetime, timezone
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from functools import lru_cache
+
+from fastapi import Depends, FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from .db import SessionLocal
+from .analysis import generate_llm_analysis_text, generate_template_analysis
+from .llm import LLMClient, LLMConfig, LLMError, build_llm_client
 from .models import Dataset, DatasetRow
 
 app = FastAPI(title="Prism Backend", version="0.1.0")
@@ -26,6 +30,16 @@ NUMERIC_REGEX = r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$"
 # 例: "http://localhost:3001,http://127.0.0.1:3001" のようにカンマ区切り
 originsEnv = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3001,http://127.0.0.1:3001")
 allowOrigins = [o.strip() for o in originsEnv.split(",") if o.strip()]
+
+
+@lru_cache
+def getLlmConfig() -> LLMConfig:
+    return LLMConfig.from_env()
+
+
+def getLlmClient(config: LLMConfig = Depends(getLlmConfig)) -> LLMClient:
+    return build_llm_client(config)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -240,38 +254,22 @@ def getDatasetStats(dataset_id: int):
 
 
 @app.get("/datasets/{dataset_id}/analysis")
-def getDatasetAnalysis(dataset_id: int):
+def getDatasetAnalysis(dataset_id: int, llm: LLMClient = Depends(getLlmClient)):
     """目的: B-1の集計結果を入力として、PoC用の簡易テキスト要約（LLMなし）を返す。"""
     stats = getDatasetStats(dataset_id)
+    useLlm = os.getenv("ANALYSIS_USE_LLM", "0").strip() in ("1", "true", "yes", "on")
 
-    rows = int(stats.get("rows") or 0)
-    columns = stats.get("columns") or []
-    kindCounts: dict[str, int] = {"number": 0, "string": 0, "mixed": 0, "empty": 0}
-    for c in columns:
-        kind = c.get("kind")
-        if kind in kindCounts:
-            kindCounts[kind] += 1
+    if not useLlm:
+        template = generate_template_analysis(stats)
+        return {"dataset_id": dataset_id, **template}
 
-    numericCols = [c.get("name") for c in columns if c.get("kind") in ("number", "mixed")]
-    stringCols = [c.get("name") for c in columns if c.get("kind") in ("string", "mixed")]
-
-    lines = []
-    lines.append("これはPoCのため、B-1の統計（stats）から自動生成した簡易要約です（LLM未接続）。")
-    lines.append(f"行数: {rows} / カラム数: {len(columns)}")
-    lines.append(
-        "カラム種別: "
-        f"number={kindCounts['number']}, "
-        f"string={kindCounts['string']}, "
-        f"mixed={kindCounts['mixed']}, "
-        f"empty={kindCounts['empty']}"
-    )
-    if numericCols:
-        lines.append("数値として扱える列（mixed含む）: " + ", ".join([n for n in numericCols if n]))
-    if stringCols:
-        lines.append("文字列として扱える列（mixed含む）: " + ", ".join([n for n in stringCols if n]))
-
+    # B-2-1: 配線確認のため、LLM呼び出しの境界だけ用意する（品質/エラー処理はB-2-2/2-3で改善）
     generatedAt = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    return {"dataset_id": dataset_id, "generated_at": generatedAt, "analysis_text": "\n".join(lines)}
+    try:
+        text = generate_llm_analysis_text(stats, llm)
+    except LLMError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"dataset_id": dataset_id, "generated_at": generatedAt, "analysis_text": text}
 
 @app.post("/datasets/upload")
 async def upload_dataset(file: UploadFile = File(...)):
