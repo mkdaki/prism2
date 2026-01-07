@@ -204,11 +204,14 @@ def build_prompt_v1(
     # 列名は長くなり得るので、まずは一定長で丸めておく（再現性とサイズ制御優先）
     names = [n[:64] for n in names]
 
+    # Tier 3 でも max_columns を尊重する（表示する列名の上限）
+    max_names = min(50, max(0, int(max_columns)))
+
     summary3 = {
         "rows": _safe_int(stats.get("rows")),
         "columns_count": len(columns),
-        "included_columns_count": min(len(names), 50),
-        "column_names": sorted(names)[:50],
+        "included_columns_count": min(len(names), max_names),
+        "column_names": sorted(names)[:max_names],
     }
 
     # それでも上限を超える場合、列名の件数を段階的に減らして必ず収める（JSONは壊さない）
