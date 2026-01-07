@@ -32,14 +32,19 @@ def testGetDatasetAnalysisCanOverrideLlmClient(client, monkeypatch):
     """目的: LLMクライアントをoverrideでき、/analysis がその結果を使えることを確認する。"""
 
     class FakeLlm:
+        def __init__(self):
+            self.last_prompt: str | None = None
+
         def generate(self, prompt: str) -> str:
+            self.last_prompt = prompt
             return "FAKE_LLM_OUTPUT"
 
     monkeypatch.setenv("ANALYSIS_USE_LLM", "1")
 
     from app.main import getLlmClient
 
-    app.dependency_overrides[getLlmClient] = lambda: FakeLlm()
+    fake = FakeLlm()
+    app.dependency_overrides[getLlmClient] = lambda: fake
     try:
         csvText = "colA,colB\n1,hello\n2,world\n"
         files = {"file": ("sample.csv", io.BytesIO(csvText.encode("utf-8")), "text/csv")}
@@ -51,6 +56,11 @@ def testGetDatasetAnalysisCanOverrideLlmClient(client, monkeypatch):
         assert response.status_code == 200
         body = response.json()
         assert body["analysis_text"] == "FAKE_LLM_OUTPUT"
+
+        # B-2-2: prompt v1 が組み立てられて渡っていること（フォーマット指示＋stats埋め込み）
+        assert fake.last_prompt is not None
+        assert "## 注目点" in fake.last_prompt
+        assert "stats_summary_json:" in fake.last_prompt
     finally:
         app.dependency_overrides.clear()
 
