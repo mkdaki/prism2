@@ -1,5 +1,6 @@
 import io
 
+from app.main import app
 
 def testGetDatasetAnalysisReturnsSummaryText(client):
     """目的: GET /datasets/{dataset_id}/analysis がPoC用の簡易テキスト要約を返すことを確認する。"""
@@ -25,6 +26,33 @@ def testGetDatasetAnalysisReturnsSummaryText(client):
     assert isinstance(body["analysis_text"], str)
     assert "行数: 4" in body["analysis_text"]
     assert "カラム数: 5" in body["analysis_text"]
+
+
+def testGetDatasetAnalysisCanOverrideLlmClient(client, monkeypatch):
+    """目的: LLMクライアントをoverrideでき、/analysis がその結果を使えることを確認する。"""
+
+    class FakeLlm:
+        def generate(self, prompt: str) -> str:
+            return "FAKE_LLM_OUTPUT"
+
+    monkeypatch.setenv("ANALYSIS_USE_LLM", "1")
+
+    from app.main import getLlmClient
+
+    app.dependency_overrides[getLlmClient] = lambda: FakeLlm()
+    try:
+        csvText = "colA,colB\n1,hello\n2,world\n"
+        files = {"file": ("sample.csv", io.BytesIO(csvText.encode("utf-8")), "text/csv")}
+        uploadResponse = client.post("/datasets/upload", files=files)
+        assert uploadResponse.status_code == 200
+        datasetId = uploadResponse.json()["dataset_id"]
+
+        response = client.get(f"/datasets/{datasetId}/analysis")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["analysis_text"] == "FAKE_LLM_OUTPUT"
+    finally:
+        app.dependency_overrides.clear()
 
 
 def testGetDatasetAnalysisReturns404ForMissingDataset(client):
