@@ -1,6 +1,6 @@
 import pytest
 
-from app.llm import LLMConfig, LLMError, build_llm_client
+from app.llm import LLMAuthError, LLMConfig, LLMError, build_llm_client
 
 
 def testBuildLlmClientReturnsStubByDefault(monkeypatch):
@@ -18,5 +18,19 @@ def testBuildLlmClientRejectsUnsupportedProvider():
     config = LLMConfig(provider="openai", api_key="dummy", model="gpt", timeout_seconds=1)
     with pytest.raises(LLMError):
         build_llm_client(config)
+
+
+def testBuildLlmClientGeminiRequiresApiKey():
+    """目的: Gemini（AI Studio）利用時はAPIキーが必須であることを確認する。"""
+    config = LLMConfig(provider="gemini", api_key=None, model="gemini-1.5-flash", timeout_seconds=1)
+    with pytest.raises(LLMAuthError):
+        build_llm_client(config)
+
+
+def testBuildLlmClientReturnsGeminiClientWhenConfigured():
+    """目的: LLM_PROVIDER=gemini の場合にクライアントが構築できること（ネットワーク呼び出しはしない）。"""
+    config = LLMConfig(provider="gemini", api_key="dummy", model="gemini-1.5-flash", timeout_seconds=1)
+    client = build_llm_client(config)
+    assert hasattr(client, "generate")
 
 

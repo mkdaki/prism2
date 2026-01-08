@@ -197,7 +197,7 @@ docker compose -p prism2-test down -v
 
 #### B-2 方針（決めること）
 
-* [ ] 利用する LLM の方式を決定（例：OpenAI API / Azure OpenAI / ローカルモデル）
+* [x] 利用する LLM の方式を決定（**Gemini API** を利用）
 * [ ] 機密/個人情報の扱い方針を決定
     * [ ] 原則：**行データは送らない**（B-1 stats など要約のみ送る）
     * [ ] カラム名/頻出値に機微が含まれる可能性があるため、送信前にマスク/制限するかを決める
@@ -248,6 +248,22 @@ docker compose -p prism2-test down -v
         * [ ] `GET /datasets/{dataset_id}/stats` を確認（入力が想定通りか）
         * [ ] `GET /datasets/{dataset_id}/analysis` を確認（出力の妥当性/言い回し/過度な断定がないか）
         * [ ] 改善点をメモし、B-2-2 のプロンプトと B-2-3 のエラーハンドリングへ反映する
+
+#### B-2-5. 実LLMプロバイダ導入（Gemini）＋疎通確認
+
+目的：`GET /datasets/{dataset_id}/analysis` が **実際に Gemini API を呼び出して**分析テキストを返せる状態にする（PoC割り切りで保存しない）。
+
+* [ ] Gemini の利用方式を確定（Google AI Studio / Vertex AI のどちらを使うか）
+* [ ] 利用モデル名・リージョン等を確定（例：`gemini-1.5-pro` など）
+* [ ] Backend に Gemini クライアント実装を追加（`LLM_PROVIDER=gemini` で選択できるように）
+* [ ] Backend の環境変数を確定・README/Compose に反映（例：`LLM_PROVIDER` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_TIMEOUT_SECONDS`）
+    * [ ] **APIキーはコミットしない**（`.env` / CI secret / ローカル設定で注入）
+    * [ ] ローカル用サンプル：`docs/env.example` をリポジトリルートの `.env` にコピーして編集する
+* [ ] 動作確認手順を確定（コンテナ内で実行）
+    * [ ] `ANALYSIS_USE_LLM=1` を有効化して `/analysis` を叩く
+    * [ ] 代表CSVで `stats → analysis` が一連で動くことを確認（必要なら B-2-4 と統合してOK）
+* [ ] 失敗時の挙動が B-2-3 の仕様どおりであることを確認（タイムアウト/認証/上限など）
+* [ ] テスト方針を確定（ユニットテストはモック継続、疎通は手動/任意のintegrationに分離）
 
 #### B-2 Done（最小）
 
