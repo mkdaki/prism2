@@ -39,6 +39,20 @@ def client() -> TestClient:
 
 
 @pytest.fixture(autouse=True)
+def forceTestEnvDefaults(monkeypatch):
+    """
+    目的: テストがローカルの .env / compose の環境変数に影響されないようにする。
+    - 既定では LLM を使わずテンプレ分析にする（ANALYSIS_USE_LLM=0）
+    - LLM関連の個別テストは monkeypatch.setenv(...) で上書きできる
+    """
+    monkeypatch.setenv("ANALYSIS_USE_LLM", "0")
+    monkeypatch.setenv("LLM_PROVIDER", "stub")
+    # APIキーが入っていてもテストからは参照しない前提だが、念のため空にしておく
+    monkeypatch.setenv("LLM_API_KEY", "")
+    yield
+
+
+@pytest.fixture(autouse=True)
 def cleanDatabase() -> None:
     """目的: 各テストが独立して再現できるよう、テストごとにDBをクリーンにする。"""
     yield

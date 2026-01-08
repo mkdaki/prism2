@@ -38,6 +38,14 @@ services:
       RUN_MIGRATIONS: "1"
       # ブラウザアクセス用CORS許可オリジン（localhost と 127.0.0.1 の両方を許可）
       CORS_ALLOW_ORIGINS: http://localhost:3001,http://127.0.0.1:3001
+      # --- LLM / Analysis（APIキーはコミットしない。ローカルは .env 等で注入） ---
+      ANALYSIS_USE_LLM: ${ANALYSIS_USE_LLM:-0}
+      LLM_PROVIDER: ${LLM_PROVIDER:-stub} # stub / gemini
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gemini-2.0-flash}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-20}
+      # Google AI Studio (Gemini API) base URL（通常はデフォルトのままでOK）
+      GEMINI_API_BASE_URL: ${GEMINI_API_BASE_URL:-https://generativelanguage.googleapis.com}
       # 必要に応じてアプリ側の環境変数を追加
       # APP_ENV: development
     depends_on:
