@@ -65,6 +65,51 @@ def testGetDatasetAnalysisCanOverrideLlmClient(client, monkeypatch):
         app.dependency_overrides.clear()
 
 
+def testGetDatasetAnalysisReturnsLlmErrorDetails(client, monkeypatch):
+    """目的: LLM例外時に、HTTPステータスとエラーJSONが一貫した形で返ることを確認する（B-2-3）。"""
+
+    from app.llm import (
+        LLMAuthError,
+        LLMInputTooLargeError,
+        LLMProviderError,
+        LLMRateLimitError,
+        LLMTimeoutError,
+    )
+    from app.main import getLlmClient
+
+    class FakeLlm:
+        def __init__(self, exc: Exception):
+            self.exc = exc
+
+        def generate(self, prompt: str) -> str:
+            raise self.exc
+
+    monkeypatch.setenv("ANALYSIS_USE_LLM", "1")
+
+    csvText = "colA,colB\n1,hello\n2,world\n"
+    files = {"file": ("sample.csv", io.BytesIO(csvText.encode("utf-8")), "text/csv")}
+    uploadResponse = client.post("/datasets/upload", files=files)
+    assert uploadResponse.status_code == 200
+    datasetId = uploadResponse.json()["dataset_id"]
+
+    cases = [
+        (LLMTimeoutError("timeout"), 504, "LLM_TIMEOUT", True),
+        (LLMRateLimitError("rate limit"), 503, "LLM_RATE_LIMIT", True),
+        (LLMAuthError("auth"), 503, "LLM_AUTH_ERROR", False),
+        (LLMInputTooLargeError("too large"), 413, "LLM_INPUT_TOO_LARGE", False),
+        (LLMProviderError("upstream"), 502, "LLM_PROVIDER_ERROR", True),
+    ]
+
+    for exc, expected_status, expected_code, expected_retryable in cases:
+        app.dependency_overrides[getLlmClient] = lambda exc=exc: FakeLlm(exc)
+        response = client.get(f"/datasets/{datasetId}/analysis")
+        assert response.status_code == expected_status
+        body = response.json()
+        assert body["detail"]["error"]["code"] == expected_code
+        assert body["detail"]["error"]["retryable"] == expected_retryable
+        assert isinstance(body["detail"]["error"]["message"], str)
+
+
 def testGetDatasetAnalysisReturns404ForMissingDataset(client):
     """目的: 存在しないdataset_idを指定した場合に 404 が返ることを確認する。"""
     response = client.get("/datasets/999999/analysis")
