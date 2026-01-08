@@ -108,6 +108,10 @@ pytest はテストの独立性のため、テスト後に対象テーブルを 
 # テスト用DBを起動（開発用とは別のボリューム/ネットワーク）
 docker compose -p prism2-test up -d db
 
+# backend のソースを変更している場合は、テスト前に必ず再ビルドする（COPY型のため）
+# ※ build を省略すると「古いイメージ」でpytestが走り、結果（テスト数/カバレッジ）がズレます
+docker compose -p prism2-test build backend
+
 # スキーマ適用（entrypointの自動migrationはOFFにして明示的に）
 docker compose -p prism2-test run --rm -e RUN_MIGRATIONS=0 backend alembic upgrade head
 
@@ -229,9 +233,9 @@ docker compose -p prism2-test down -v
 
 #### B-2-3. エラーハンドリング（PoCでも最低限）
 
-* [ ] LLM 失敗時の扱いを実装（タイムアウト、認証エラー、上限超過など）
-* [ ] API レスポンス（ステータス/メッセージ）を確定
-* [ ] ユニットテスト：LLM 例外時に期待ステータス/レスポンスになる
+* [x] LLM 失敗時の扱いを実装（タイムアウト、認証エラー、上限超過など）
+* [x] API レスポンス（ステータス/メッセージ）を確定
+* [x] ユニットテスト：LLM 例外時に期待ステータス/レスポンスになる
 
 #### B-2-4. 代表 CSV での手動評価（品質チューニングの入口）
 
@@ -247,9 +251,9 @@ docker compose -p prism2-test down -v
 
 #### B-2 Done（最小）
 
-* [ ] `GET /datasets/{dataset_id}/analysis` が Swagger で確認できる
-* [ ] stats を入力にしたテキストが返り、失敗時の挙動（ステータス/メッセージ）が決まっている
-* [ ] テストがあり、LLM 呼び出し部分はモックで検証できる
+* [x] `GET /datasets/{dataset_id}/analysis` が Swagger で確認できる
+* [x] stats を入力にしたテキストが返り、失敗時の挙動（ステータス/メッセージ）が決まっている
+* [x] テストがあり、LLM 呼び出し部分はモックで検証できる
 
 ---
 

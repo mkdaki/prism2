@@ -11,7 +11,17 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .db import SessionLocal
 from .analysis import generate_llm_analysis_text, generate_template_analysis
-from .llm import LLMClient, LLMConfig, LLMError, build_llm_client
+from .llm import (
+    LLMAuthError,
+    LLMClient,
+    LLMConfig,
+    LLMError,
+    LLMInputTooLargeError,
+    LLMProviderError,
+    LLMRateLimitError,
+    LLMTimeoutError,
+    build_llm_client,
+)
 from .models import Dataset, DatasetRow
 
 app = FastAPI(title="Prism Backend", version="0.1.0")
@@ -268,7 +278,29 @@ def getDatasetAnalysis(dataset_id: int, llm: LLMClient = Depends(getLlmClient)):
     try:
         text = generate_llm_analysis_text(stats, llm)
     except LLMError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # B-2-3: エラーハンドリング（PoCでも最低限）
+        status_code = 500
+        if isinstance(e, LLMTimeoutError):
+            status_code = 504
+        elif isinstance(e, LLMRateLimitError):
+            status_code = 503
+        elif isinstance(e, LLMAuthError):
+            status_code = 503
+        elif isinstance(e, LLMInputTooLargeError):
+            status_code = 413
+        elif isinstance(e, LLMProviderError):
+            status_code = 502
+
+        raise HTTPException(
+            status_code=status_code,
+            detail={
+                "error": {
+                    "code": getattr(e, "code", "LLM_ERROR"),
+                    "message": str(e),
+                    "retryable": bool(getattr(e, "retryable", False)),
+                }
+            },
+        )
     return {"dataset_id": dataset_id, "generated_at": generatedAt, "analysis_text": text}
 
 @app.post("/datasets/upload")
