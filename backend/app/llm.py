@@ -122,7 +122,7 @@ class GeminiAiStudioClient:
         ).rstrip("/")
 
     def generate(self, prompt: str) -> str:
-        model = (self.config.model or "").strip() or "gemini-1.5-flash"
+        model = (self.config.model or "").strip() or "gemini-2.0-flash"
         if not model.startswith("models/"):
             model = f"models/{model}"
 

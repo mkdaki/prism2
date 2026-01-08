@@ -201,7 +201,7 @@ docker compose -p prism2-test down -v
 * [ ] 機密/個人情報の扱い方針を決定
     * [ ] 原則：**行データは送らない**（B-1 stats など要約のみ送る）
     * [ ] カラム名/頻出値に機微が含まれる可能性があるため、送信前にマスク/制限するかを決める
-* [ ] タイムアウト/失敗時の API 方針を決定（例：503/504、リトライ有無）
+* [x] タイムアウト/失敗時の API 方針を決定（例：503/504、リトライ有無）
 * [ ] コスト/速度の上限を決める（例：最大トークン、stats の入力サイズ上限）
 
 #### B-2-0. 最小の土台（LLM なしで形を固める）
@@ -239,31 +239,37 @@ docker compose -p prism2-test down -v
 
 #### B-2-4. 代表 CSV での手動評価（品質チューニングの入口）
 
-* [ ] 代表データ（想定利用に近い CSV）で B-1 stats → B-2 出力を確認し、改善点をメモする
-    * [ ] 例：Playwright スクレイピング結果の列を含む CSV
-    * [ ] 注意：**機密/個人情報が含まれる場合はコミットしない**（匿名化したサンプルのみリポジトリに入れる）
-    * [ ] 代表CSVの置き場所：`samples/playwright_scrape_sample.csv`（必要に応じて更新）
-    * [ ] 手順（最小）：
-        * [ ] CSV をアップロードして dataset_id を得る
-        * [ ] `GET /datasets/{dataset_id}/stats` を確認（入力が想定通りか）
-        * [ ] `GET /datasets/{dataset_id}/analysis` を確認（出力の妥当性/言い回し/過度な断定がないか）
-        * [ ] 改善点をメモし、B-2-2 のプロンプトと B-2-3 のエラーハンドリングへ反映する
+* [x] 代表データ（想定利用に近い CSV）で B-1 stats → B-2 出力を確認し、改善点をメモする
+    * 例：Playwright スクレイピング結果の列を含む CSV
+    * 注意：**機密/個人情報が含まれる場合はコミットしない**（匿名化したサンプルのみリポジトリに入れる）
+    * 代表CSVの置き場所：`samples/playwright_scrape_sample.csv`（必要に応じて更新）
+    * 手順（最小）：
+        * [x] CSV をアップロードして dataset_id を得る
+        * [x] `GET /datasets/{dataset_id}/stats` を確認（入力が想定通りか）
+        * [x] `GET /datasets/{dataset_id}/analysis` を確認（出力の妥当性/言い回し/過度な断定がないか）
+        * [x] 改善点をメモし、B-2-2 のプロンプトと B-2-3 のエラーハンドリングへ反映する
+
+メモ（代表CSVでの確認結果 / 改善点）：
+- `CategoryText` の上位値に不自然な空白混入（例：`IT・通信・インターネ ット`）が見られた。
+  - 対応案：CSV取り込み時または集計前に、連続空白の圧縮・全角/半角スペース正規化を検討。
+- LLM出力の見出しが崩れるケース（例：`## 前 提・限界` のようにスペースが混入）が見られた。
+  - 対応案：プロンプトに「見出しはスペースを入れず、指定の文言を完全一致で出力」と追記することを検討。
 
 #### B-2-5. 実LLMプロバイダ導入（Gemini）＋疎通確認
 
 目的：`GET /datasets/{dataset_id}/analysis` が **実際に Gemini API を呼び出して**分析テキストを返せる状態にする（PoC割り切りで保存しない）。
 
-* [ ] Gemini の利用方式を確定（Google AI Studio / Vertex AI のどちらを使うか）
-* [ ] 利用モデル名・リージョン等を確定（例：`gemini-1.5-pro` など）
-* [ ] Backend に Gemini クライアント実装を追加（`LLM_PROVIDER=gemini` で選択できるように）
-* [ ] Backend の環境変数を確定・README/Compose に反映（例：`LLM_PROVIDER` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_TIMEOUT_SECONDS`）
-    * [ ] **APIキーはコミットしない**（`.env` / CI secret / ローカル設定で注入）
-    * [ ] ローカル用サンプル：`docs/env.example` をリポジトリルートの `.env` にコピーして編集する
+* [x] Gemini の利用方式を確定（**Google AI Studio（API Key方式）** を利用）
+* [x] 利用モデル名を確定（デフォルト：`gemini-1.5-flash`、必要に応じて変更）
+* [x] Backend に Gemini クライアント実装を追加（`LLM_PROVIDER=gemini` で選択できるように）
+* [x] Backend の環境変数を確定・Compose に反映（例：`LLM_PROVIDER` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_TIMEOUT_SECONDS`）
+    * [x] **APIキーはコミットしない**（`.env` / CI secret / ローカル設定で注入）
+    * [x] ローカル用サンプル：`docs/env.example` をリポジトリルートの `.env` にコピーして編集する
 * [ ] 動作確認手順を確定（コンテナ内で実行）
-    * [ ] `ANALYSIS_USE_LLM=1` を有効化して `/analysis` を叩く
-    * [ ] 代表CSVで `stats → analysis` が一連で動くことを確認（必要なら B-2-4 と統合してOK）
+    * [x] `ANALYSIS_USE_LLM=1` を有効化して `/analysis` を叩く
+    * [x] 代表CSVで `stats → analysis` が一連で動くことを確認（必要なら B-2-4 と統合してOK）
 * [ ] 失敗時の挙動が B-2-3 の仕様どおりであることを確認（タイムアウト/認証/上限など）
-* [ ] テスト方針を確定（ユニットテストはモック継続、疎通は手動/任意のintegrationに分離）
+* [x] テスト方針を確定（ユニットテストはモック継続、疎通は手動/任意のintegrationに分離）
 
 #### B-2 Done（最小）
 

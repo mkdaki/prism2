@@ -42,7 +42,7 @@ services:
       ANALYSIS_USE_LLM: ${ANALYSIS_USE_LLM:-0}
       LLM_PROVIDER: ${LLM_PROVIDER:-stub} # stub / gemini
       LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_MODEL: ${LLM_MODEL:-gemini-1.5-flash}
+      LLM_MODEL: ${LLM_MODEL:-gemini-2.0-flash}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-20}
       # Google AI Studio (Gemini API) base URL（通常はデフォルトのままでOK）
       GEMINI_API_BASE_URL: ${GEMINI_API_BASE_URL:-https://generativelanguage.googleapis.com}

@@ -29,7 +29,7 @@ def testBuildLlmClientGeminiRequiresApiKey():
 
 def testBuildLlmClientReturnsGeminiClientWhenConfigured():
     """目的: LLM_PROVIDER=gemini の場合にクライアントが構築できること（ネットワーク呼び出しはしない）。"""
-    config = LLMConfig(provider="gemini", api_key="dummy", model="gemini-1.5-flash", timeout_seconds=1)
+    config = LLMConfig(provider="gemini", api_key="dummy", model="gemini-2.0-flash", timeout_seconds=1)
     client = build_llm_client(config)
     assert hasattr(client, "generate")
 

@@ -37,7 +37,7 @@ def testGeminiClientParsesSuccessResponse(monkeypatch):
     monkeypatch.setattr(llm_mod.httpx, "Client", FakeClient)
 
     client = GeminiAiStudioClient(
-        LLMConfig(provider="gemini", api_key="dummy", model="gemini-1.5-flash", timeout_seconds=1)
+        LLMConfig(provider="gemini", api_key="dummy", model="gemini-2.0-flash", timeout_seconds=1)
     )
     out = client.generate("prompt")
     assert out == "hello\nworld"
@@ -82,7 +82,7 @@ def testGeminiClientMapsHttpErrors(monkeypatch, status_code, message, expected_e
     monkeypatch.setattr(llm_mod.httpx, "Client", FakeClient)
 
     client = GeminiAiStudioClient(
-        LLMConfig(provider="gemini", api_key="dummy", model="gemini-1.5-flash", timeout_seconds=1)
+        LLMConfig(provider="gemini", api_key="dummy", model="gemini-2.0-flash", timeout_seconds=1)
     )
     exc_type = getattr(__import__("app.llm", fromlist=[expected_exc]), expected_exc)
     with pytest.raises(exc_type):
@@ -113,7 +113,7 @@ def testGeminiClientMapsTimeout(monkeypatch):
     monkeypatch.setattr(llm_mod.httpx, "Client", FakeClient)
 
     client = GeminiAiStudioClient(
-        LLMConfig(provider="gemini", api_key="dummy", model="gemini-1.5-flash", timeout_seconds=0.01)
+        LLMConfig(provider="gemini", api_key="dummy", model="gemini-2.0-flash", timeout_seconds=0.01)
     )
     with pytest.raises(LLMTimeoutError):
         client.generate("prompt")
@@ -147,7 +147,7 @@ def testGeminiClientDetectsTooLargeFrom400Message(monkeypatch):
     monkeypatch.setattr(llm_mod.httpx, "Client", FakeClient)
 
     client = GeminiAiStudioClient(
-        LLMConfig(provider="gemini", api_key="dummy", model="gemini-1.5-flash", timeout_seconds=1)
+        LLMConfig(provider="gemini", api_key="dummy", model="gemini-2.0-flash", timeout_seconds=1)
     )
     with pytest.raises(LLMInputTooLargeError):
         client.generate("prompt")
