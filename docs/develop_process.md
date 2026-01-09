@@ -1,6 +1,7 @@
 # Prism PoC 実装タスクチェックリスト
 
-（2026/01/06 更新）
+（2026/01/09 更新）
+
 ## 開発方針：ローカル環境を汚さない（テストはコンテナ内で完結）
 
 本プロジェクトは Windows11 + Docker Desktop を前提とし、ローカルPCのPython環境（グローバル/venv）を汚さない方針とする。
@@ -10,28 +11,34 @@
 - CI も「コンテナで実行するテスト手順」を基準に整備し、ローカル/CIで結果がズレないようにする
 
 目的：
+
 - 環境差分による不具合（依存関係・バージョン差異）を最小化する
 - 参画者が増えても再現性の高い開発手順を維持する
-
 
 ## フェーズA：PoCを「操作可能」にする必須タスク
 
 ### A-0. 品質・土台（先に整備）
 
 * [x] A-0-1. CORS を設定
-    * [x] 例：`http://localhost:3001` を許可
-    * [x] 許可オリジンは環境変数で切替できるようにする
+  
+  * [x] 例：`http://localhost:3001` を許可
+  * [x] 許可オリジンは環境変数で切替できるようにする
+
 * [x] A-0-2. テスト基盤を追加
-    * [x] `pytest` / FastAPI TestClient
-    * [x] カバレッジ計測（80%以上を維持）
-    * [x] テストは backend コンテナ内で実行する（ローカルPCへpytest等を導入しない）
+  
+  * [x] `pytest` / FastAPI TestClient
+  * [x] カバレッジ計測（80%以上を維持）
+  * [x] テストは backend コンテナ内で実行する（ローカルPCへpytest等を導入しない）
 
 * [x] A-0-3. CI を追加
-    * [x] Backend：テスト + coverage 80%以上
-    * [x] Frontend：build を実行
+  
+  * [x] Backend：テスト + coverage 80%以上
+  * [x] Frontend：build を実行
+
 * [x] A-0-4. Alembic 方針決定
-    * [x] Alembic を導入し、起動時 `create_all` 依存を解消する方針を決める
-    * [x] フェーズAでは「方針決定」まででも可（導入作業はフェーズBに寄せても良い）
+  
+  * [x] Alembic を導入し、起動時 `create_all` 依存を解消する方針を決める
+  * [x] フェーズAでは「方針決定」まででも可（導入作業はフェーズBに寄せても良い）
 
 #### A-0-4. Alembic 方針決定（決定事項）
 
@@ -46,15 +53,20 @@
 ### A-1. データセット一覧取得 API
 
 * [x] `GET /datasets` エンドポイントを実装
-* [x] `datasets` テーブルから一覧取得
-* [x] 各 dataset について以下を返却
 
+* [x] `datasets` テーブルから一覧取得
+
+* [x] 各 dataset について以下を返却
+  
   * [x] dataset_id
   * [x] filename
   * [x] created_at
   * [x] 行数（`dataset_rows` の COUNT）
+
 * [x] レスポンス形式を JSON として確定
+
 * [x] Swagger（/docs）で確認
+
 * [x] ユニットテストを追加（正常系：0件/複数件、行数COUNTが返ること）
 
 ---
@@ -62,14 +74,19 @@
 ### A-2. データセット詳細取得 API
 
 * [x] `GET /datasets/{dataset_id}` を実装
-* [x] 指定 dataset_id の存在チェック
-* [x] 以下の情報を返却
 
+* [x] 指定 dataset_id の存在チェック
+
+* [x] 以下の情報を返却
+  
   * [x] メタ情報（filename / created_at）
   * [x] 行数
   * [x] JSONB データのサンプル（先頭 N 行）
+
 * [x] サンプル件数を固定値（例：10件）にする
+
 * [x] エラー時のレスポンスを定義（404 等）
+
 * [x] ユニットテストを追加（正常系、異常系：存在しないIDで404）
 
 ---
@@ -127,18 +144,26 @@ docker compose -p prism2-test down -v
 ### B-1. 最小集計（統計）API
 
 * [x] `GET /datasets/{dataset_id}/stats` を実装
-* [x] 対象 dataset の行数を算出
-* [x] JSONB からカラム一覧を抽出
-* [x] 数値カラムについて以下を算出（可能な範囲で）
 
+* [x] 対象 dataset の行数を算出
+
+* [x] JSONB からカラム一覧を抽出
+
+* [x] 数値カラムについて以下を算出（可能な範囲で）
+  
   * [x] min
   * [x] max
   * [x] avg
+
 * [x] 集計結果を JSON で返却
+
 * [x] 計算不可カラムは除外（PoC割り切り）
+
 * [x] 文字列カラムも要約対象に含める（例：案件名）
-    * [x] カラムごとに kind（`number` / `string` / `mixed` / `empty`）を返す
-    * [x] `string` / `mixed` は上位頻出値（top values）を返す
+  
+  * [x] カラムごとに kind（`number` / `string` / `mixed` / `empty`）を返す
+  * [x] `string` / `mixed` は上位頻出値（top values）を返す
+
 * [x] ユニットテストを追加（数値/非数値/欠損の混在を含む最低限のパターン）
 
 #### B-1 レスポンス例（参考）
@@ -199,8 +224,8 @@ docker compose -p prism2-test down -v
 
 * [x] 利用する LLM の方式を決定（**Gemini API** を利用）
 * [ ] 機密/個人情報の扱い方針を決定
-    * [ ] 原則：**行データは送らない**（B-1 stats など要約のみ送る）
-    * [ ] カラム名/頻出値に機微が含まれる可能性があるため、送信前にマスク/制限するかを決める
+  * [ ] 原則：**行データは送らない**（B-1 stats など要約のみ送る）
+  * [ ] カラム名/頻出値に機微が含まれる可能性があるため、送信前にマスク/制限するかを決める
 * [x] タイムアウト/失敗時の API 方針を決定（例：503/504、リトライ有無）
 * [ ] コスト/速度の上限を決める（例：最大トークン、stats の入力サイズ上限）
 
@@ -226,6 +251,7 @@ docker compose -p prism2-test down -v
 * [x] ユニットテスト：プロンプト組み立てが期待通り（stats が埋め込まれる、サイズ上限が効く）
 
 補足（初期パラメータ / v1 方針）：
+
 - **max_columns=30**
 - **max_top_values_per_column=3**
 - **max_prompt_chars=9000**
@@ -240,16 +266,17 @@ docker compose -p prism2-test down -v
 #### B-2-4. 代表 CSV での手動評価（品質チューニングの入口）
 
 * [x] 代表データ（想定利用に近い CSV）で B-1 stats → B-2 出力を確認し、改善点をメモする
-    * 例：Playwright スクレイピング結果の列を含む CSV
-    * 注意：**機密/個人情報が含まれる場合はコミットしない**（匿名化したサンプルのみリポジトリに入れる）
-    * 代表CSVの置き場所：`samples/playwright_scrape_sample.csv`（必要に応じて更新）
-    * 手順（最小）：
-        * [x] CSV をアップロードして dataset_id を得る
-        * [x] `GET /datasets/{dataset_id}/stats` を確認（入力が想定通りか）
-        * [x] `GET /datasets/{dataset_id}/analysis` を確認（出力の妥当性/言い回し/過度な断定がないか）
-        * [x] 改善点をメモし、B-2-2 のプロンプトと B-2-3 のエラーハンドリングへ反映する
+  * 例：Playwright スクレイピング結果の列を含む CSV
+  * 注意：**機密/個人情報が含まれる場合はコミットしない**（匿名化したサンプルのみリポジトリに入れる）
+  * 代表CSVの置き場所：`samples/playwright_scrape_sample.csv`（必要に応じて更新）
+  * 手順（最小）：
+    * [x] CSV をアップロードして dataset_id を得る
+    * [x] `GET /datasets/{dataset_id}/stats` を確認（入力が想定通りか）
+    * [x] `GET /datasets/{dataset_id}/analysis` を確認（出力の妥当性/言い回し/過度な断定がないか）
+    * [x] 改善点をメモし、B-2-2 のプロンプトと B-2-3 のエラーハンドリングへ反映する
 
 メモ（代表CSVでの確認結果 / 改善点）：
+
 - `CategoryText` の上位値に不自然な空白混入（例：`IT・通信・インターネ ット`）が見られた。
   - 対応案：CSV取り込み時または集計前に、連続空白の圧縮・全角/半角スペース正規化を検討。
 - LLM出力の見出しが崩れるケース（例：`## 前 提・限界` のようにスペースが混入）が見られた。
@@ -263,11 +290,11 @@ docker compose -p prism2-test down -v
 * [x] 利用モデル名を確定（デフォルト：`gemini-1.5-flash`、必要に応じて変更）
 * [x] Backend に Gemini クライアント実装を追加（`LLM_PROVIDER=gemini` で選択できるように）
 * [x] Backend の環境変数を確定・Compose に反映（例：`LLM_PROVIDER` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_TIMEOUT_SECONDS`）
-    * [x] **APIキーはコミットしない**（`.env` / CI secret / ローカル設定で注入）
-    * [x] ローカル用サンプル：`docs/env.example` をリポジトリルートの `.env` にコピーして編集する
-* [ ] 動作確認手順を確定（コンテナ内で実行）
-    * [x] `ANALYSIS_USE_LLM=1` を有効化して `/analysis` を叩く
-    * [x] 代表CSVで `stats → analysis` が一連で動くことを確認（必要なら B-2-4 と統合してOK）
+  * [x] **APIキーはコミットしない**（`.env` / CI secret / ローカル設定で注入）
+  * [x] ローカル用サンプル：`docs/env.example` をリポジトリルートの `.env` にコピーして編集する
+* [x] 動作確認手順を確定（コンテナ内で実行）
+  * [x] `ANALYSIS_USE_LLM=1` を有効化して `/analysis` を叩く
+  * [x] 代表CSVで `stats → analysis` が一連で動くことを確認（必要なら B-2-4 と統合してOK）
 * [ ] 失敗時の挙動が B-2-3 の仕様どおりであることを確認（タイムアウト/認証/上限など）
 * [x] テスト方針を確定（ユニットテストはモック継続、疎通は手動/任意のintegrationに分離）
 
@@ -283,8 +310,15 @@ docker compose -p prism2-test down -v
 
 ### C-0. 品質・土台（画面機能の前に）
 
-* [ ] フロントのCIを整備（`npm ci` → `npm run build`）
-* [ ] フロントの簡易テスト導入（最低限のレンダリング/ロジックのテスト。テスト方式はここで確定）
+* [x] フロントのCIを整備（`npm ci` → `npm run build`）
+* [x] フロントの簡易テスト導入（最低限のレンダリング/ロジックのテスト。テスト方式はここで確定）
+
+#### C-0 決定事項（テスト方式メモ）
+
+- ユニットテストは **Vitest** を採用し、`frontend` で `npm test`（=`vitest run`）として実行する。
+- 当面の対象は **ロジック/API呼び出し（例：`src/api/*`）** を優先する（ブラウザ依存はモック/スタブで吸収）。
+- CI では `frontend-build` ジョブで `npm ci` → `npm test` → `npm run build` を実行し、失敗時はPRを落とす。
+- Reactコンポーネントのレンダリングテスト（Testing Library / jsdom 等）は、C-1/C-2の画面実装が進んだ段階で必要最小限を追加する。
 
 ---
 
