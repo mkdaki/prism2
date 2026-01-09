@@ -74,7 +74,7 @@ def listDatasets():
                 Dataset.id.label("dataset_id"),
                 Dataset.filename,
                 Dataset.created_at,
-                func.count(DatasetRow.id).label("rows"),
+                func.count(DatasetRow.id).label("row_count"),
             )
             .select_from(Dataset)
             .outerjoin(DatasetRow, DatasetRow.dataset_id == Dataset.id)
@@ -83,15 +83,16 @@ def listDatasets():
         )
 
         results = db.execute(statement).all()
-        return [
+        datasets = [
             {
                 "dataset_id": row.dataset_id,
                 "filename": row.filename,
                 "created_at": row.created_at,
-                "rows": row.rows,
+                "row_count": row.row_count,
             }
             for row in results
         ]
+        return {"datasets": datasets}
     except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
     finally:

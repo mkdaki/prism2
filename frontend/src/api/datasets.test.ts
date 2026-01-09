@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { uploadDataset } from "./datasets";
+import { uploadDataset, getDatasets } from "./datasets";
 
 describe("uploadDataset", () => {
     beforeEach(() => {
@@ -48,4 +48,72 @@ describe("uploadDataset", () => {
     });
 });
 
+describe("getDatasets", () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("データセット一覧を取得できる（0件）", async () => {
+        const mockJson = { datasets: [] };
+
+        const fetchMock = vi.fn(async () => {
+            return new Response(JSON.stringify(mockJson), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            });
+        });
+        vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+        const actual = await getDatasets({ apiBaseUrl: "http://example.test" });
+
+        expect(actual).toEqual(mockJson);
+        expect(actual.datasets).toHaveLength(0);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toBe("http://example.test/datasets");
+        expect(init.method).toBe("GET");
+    });
+
+    it("データセット一覧を取得できる（複数件）", async () => {
+        const mockJson = {
+            datasets: [
+                { dataset_id: 1, filename: "test1.csv", created_at: "2026-01-01T00:00:00Z", row_count: 10 },
+                { dataset_id: 2, filename: "test2.csv", created_at: "2026-01-02T00:00:00Z", row_count: 20 },
+            ],
+        };
+
+        const fetchMock = vi.fn(async () => {
+            return new Response(JSON.stringify(mockJson), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            });
+        });
+        vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+        const actual = await getDatasets({ apiBaseUrl: "http://example.test" });
+
+        expect(actual).toEqual(mockJson);
+        expect(actual.datasets).toHaveLength(2);
+        expect(actual.datasets[0].dataset_id).toBe(1);
+        expect(actual.datasets[0].filename).toBe("test1.csv");
+        expect(actual.datasets[0].row_count).toBe(10);
+        expect(actual.datasets[1].dataset_id).toBe(2);
+    });
+
+    it("失敗時にエラーを投げる", async () => {
+        const fetchMock = vi.fn(async () => {
+            return new Response(JSON.stringify({ detail: "Internal Server Error" }), {
+                status: 500,
+                headers: { "Content-Type": "application/json" },
+            });
+        });
+        vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+        await expect(getDatasets({ apiBaseUrl: "http://example.test" })).rejects.toThrow("Internal Server Error");
+    });
+});
 

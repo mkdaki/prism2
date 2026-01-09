@@ -4,6 +4,17 @@ export type UploadDatasetResponse = {
     filename: string;
 };
 
+export type Dataset = {
+    dataset_id: number;
+    filename: string;
+    created_at: string;
+    row_count: number;
+};
+
+export type GetDatasetsResponse = {
+    datasets: Dataset[];
+};
+
 export type UploadDatasetOptions = {
     apiBaseUrl?: string;
     signal?: AbortSignal;
@@ -18,11 +29,6 @@ function getApiBaseUrl(options?: UploadDatasetOptions): string {
     const fromViteEnv = (import.meta as unknown as { env?: Record<string, unknown> }).env?.VITE_API_BASE_URL;
     if (typeof fromViteEnv === "string" && fromViteEnv.trim()) {
         return fromViteEnv.trim().replace(/\/+$/, "");
-    }
-
-    const fromProcessEnv = typeof process !== "undefined" ? process.env.VITE_API_BASE_URL : undefined;
-    if (typeof fromProcessEnv === "string" && fromProcessEnv.trim()) {
-        return fromProcessEnv.trim().replace(/\/+$/, "");
     }
 
     return "http://localhost:8001";
@@ -63,4 +69,21 @@ export async function uploadDataset(file: File, options?: UploadDatasetOptions):
     return json;
 }
 
+export async function getDatasets(options?: UploadDatasetOptions): Promise<GetDatasetsResponse> {
+    /** 目的: `GET /datasets` からデータセット一覧を取得する。 */
+    const apiBaseUrl = getApiBaseUrl(options);
+
+    const response = await fetch(`${apiBaseUrl}/datasets`, {
+        method: "GET",
+        signal: options?.signal,
+    });
+
+    if (!response.ok) {
+        const detail = await parseErrorDetail(response);
+        throw new Error(detail);
+    }
+
+    const json = (await response.json()) as GetDatasetsResponse;
+    return json;
+}
 

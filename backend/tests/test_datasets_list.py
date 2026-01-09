@@ -6,7 +6,7 @@ def testGetDatasetsReturnsEmptyList(client):
     response = client.get("/datasets")
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json() == {"datasets": []}
 
 
 def testGetDatasetsReturnsMultipleWithRowCounts(client):
@@ -27,23 +27,26 @@ def testGetDatasetsReturnsMultipleWithRowCounts(client):
 
     assert response.status_code == 200
     body = response.json()
-    assert isinstance(body, list)
-    assert len(body) == 2
+    assert isinstance(body, dict)
+    assert "datasets" in body
+    datasets = body["datasets"]
+    assert isinstance(datasets, list)
+    assert len(datasets) == 2
 
-    assert body[0]["dataset_id"] == min(firstDatasetId, secondDatasetId)
-    assert body[1]["dataset_id"] == max(firstDatasetId, secondDatasetId)
+    assert datasets[0]["dataset_id"] == min(firstDatasetId, secondDatasetId)
+    assert datasets[1]["dataset_id"] == max(firstDatasetId, secondDatasetId)
 
-    itemsById = {item["dataset_id"]: item for item in body}
+    itemsById = {item["dataset_id"]: item for item in datasets}
 
     firstItem = itemsById[firstDatasetId]
     assert firstItem["filename"] == "first.csv"
-    assert firstItem["rows"] == 2
+    assert firstItem["row_count"] == 2
     assert isinstance(firstItem["created_at"], str)
     assert firstItem["created_at"] != ""
 
     secondItem = itemsById[secondDatasetId]
     assert secondItem["filename"] == "second.csv"
-    assert secondItem["rows"] == 1
+    assert secondItem["row_count"] == 1
     assert isinstance(secondItem["created_at"], str)
     assert secondItem["created_at"] != ""
 
