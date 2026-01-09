@@ -310,8 +310,15 @@ docker compose -p prism2-test down -v
 
 ### C-0. 品質・土台（画面機能の前に）
 
-* [ ] フロントのCIを整備（`npm ci` → `npm run build`）
-* [ ] フロントの簡易テスト導入（最低限のレンダリング/ロジックのテスト。テスト方式はここで確定）
+* [x] フロントのCIを整備（`npm ci` → `npm run build`）
+* [x] フロントの簡易テスト導入（最低限のレンダリング/ロジックのテスト。テスト方式はここで確定）
+
+#### C-0 決定事項（テスト方式メモ）
+
+- ユニットテストは **Vitest** を採用し、`frontend` で `npm test`（=`vitest run`）として実行する。
+- 当面の対象は **ロジック/API呼び出し（例：`src/api/*`）** を優先する（ブラウザ依存はモック/スタブで吸収）。
+- CI では `frontend-build` ジョブで `npm ci` → `npm test` → `npm run build` を実行し、失敗時はPRを落とす。
+- Reactコンポーネントのレンダリングテスト（Testing Library / jsdom 等）は、C-1/C-2の画面実装が進んだ段階で必要最小限を追加する。
 
 ---
 
