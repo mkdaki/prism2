@@ -295,8 +295,52 @@ docker compose -p prism2-test down -v
 * [x] 動作確認手順を確定（コンテナ内で実行）
   * [x] `ANALYSIS_USE_LLM=1` を有効化して `/analysis` を叩く
   * [x] 代表CSVで `stats → analysis` が一連で動くことを確認（必要なら B-2-4 と統合してOK）
-* [ ] 失敗時の挙動が B-2-3 の仕様どおりであることを確認（タイムアウト/認証/上限など）
+* [x] 失敗時の挙動が B-2-3 の仕様どおりであることを確認（タイムアウト/認証/上限など）
 * [x] テスト方針を確定（ユニットテストはモック継続、疎通は手動/任意のintegrationに分離）
+
+#### B-2-5 確認結果（2026/01/10）
+
+**テスト実行結果:**
+- 全29テスト通過（test_gemini_client.py 8件、test_dataset_analysis.py 4件を含む）
+- カバレッジ: 89.55%（目標80%以上を達成）
+
+**確認済みエラーハンドリング:**
+
+1. **LLMエラークラス定義** (`app/llm.py`)
+   - `LLMTimeoutError` → 504 Gateway Timeout (retryable)
+   - `LLMAuthError` → 503 Service Unavailable (non-retryable)
+   - `LLMRateLimitError` → 503 Service Unavailable (retryable)
+   - `LLMInputTooLargeError` → 413 Payload Too Large (non-retryable)
+   - `LLMProviderError` → 502 Bad Gateway (retryable)
+
+2. **Geminiクライアントでのマッピング** (`app/llm.py` lines 140-198)
+   - HTTP 401/403 → `LLMAuthError`
+   - HTTP 429 → `LLMRateLimitError`
+   - HTTP 413 / 400(message含む) → `LLMInputTooLargeError`
+   - HTTP 500-599 → `LLMProviderError`
+   - `httpx.TimeoutException` → `LLMTimeoutError`
+
+3. **APIエンドポイントでのエラーレスポンス** (`app/main.py` lines 279-304)
+   - エラーレスポンス形式: `{"error": {"code": "...", "message": "...", "retryable": true/false}}`
+   - 各LLMエラーが適切なHTTPステータスにマップされることを確認
+
+**テスト実行手順:**
+```bash
+# テスト用DBを起動
+docker compose -p prism2-test up -d db
+
+# Backendをビルド
+docker compose -p prism2-test build backend
+
+# スキーマ適用
+docker compose -p prism2-test run --rm -e RUN_MIGRATIONS=0 backend alembic upgrade head
+
+# テスト実行
+docker compose -p prism2-test run --rm -e RUN_MIGRATIONS=0 backend pytest -v --cov=app
+
+# クリーンアップ
+docker compose -p prism2-test down -v
+```
 
 #### B-2 Done（最小）
 
