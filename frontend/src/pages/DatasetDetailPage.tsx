@@ -8,6 +8,7 @@ import {
     type DatasetStats,
     type DatasetAnalysis,
 } from "../api/datasets";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 export default function DatasetDetailPage() {
     const { datasetId } = useParams<{ datasetId: string }>();
@@ -183,23 +184,57 @@ export default function DatasetDetailPage() {
                                             存在: {col.present_count} / 非空: {col.non_empty_count}
                                         </p>
                                         {col.numeric && (
-                                            <div style={{ marginTop: 8, fontSize: 14 }}>
-                                                <strong>数値統計:</strong> 件数={col.numeric.count}, 最小=
-                                                {col.numeric.min.toFixed(2)}, 最大={col.numeric.max.toFixed(2)}, 平均=
-                                                {col.numeric.avg.toFixed(2)}
-                                            </div>
+                                            <>
+                                                <div style={{ marginTop: 8, fontSize: 14 }}>
+                                                    <strong>数値統計:</strong> 件数={col.numeric.count}, 最小=
+                                                    {col.numeric.min.toFixed(2)}, 最大={col.numeric.max.toFixed(2)}, 平均=
+                                                    {col.numeric.avg.toFixed(2)}
+                                                </div>
+                                                <div style={{ marginTop: 16, width: "100%", height: 200 }}>
+                                                    <ResponsiveContainer>
+                                                        <BarChart
+                                                            data={[
+                                                                { name: "最小値", value: col.numeric.min },
+                                                                { name: "平均値", value: col.numeric.avg },
+                                                                { name: "最大値", value: col.numeric.max },
+                                                            ]}
+                                                        >
+                                                            <CartesianGrid strokeDasharray="3 3" />
+                                                            <XAxis dataKey="name" />
+                                                            <YAxis />
+                                                            <Tooltip />
+                                                            <Legend />
+                                                            <Bar dataKey="value" fill="#2196f3" name="数値" />
+                                                        </BarChart>
+                                                    </ResponsiveContainer>
+                                                </div>
+                                            </>
                                         )}
                                         {col.top_values && col.top_values.length > 0 && (
-                                            <div style={{ marginTop: 8, fontSize: 14 }}>
-                                                <strong>頻出値:</strong>
-                                                <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
-                                                    {col.top_values.map((tv, idx) => (
-                                                        <li key={idx}>
-                                                            {tv.value} ({tv.count}件)
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
+                                            <>
+                                                <div style={{ marginTop: 8, fontSize: 14 }}>
+                                                    <strong>頻出値:</strong>
+                                                    <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
+                                                        {col.top_values.map((tv, idx) => (
+                                                            <li key={idx}>
+                                                                {tv.value} ({tv.count}件)
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                                <div style={{ marginTop: 16, width: "100%", height: 200 }}>
+                                                    <ResponsiveContainer>
+                                                        <BarChart data={col.top_values}>
+                                                            <CartesianGrid strokeDasharray="3 3" />
+                                                            <XAxis dataKey="value" />
+                                                            <YAxis />
+                                                            <Tooltip />
+                                                            <Legend />
+                                                            <Bar dataKey="count" fill="#4caf50" name="出現回数" />
+                                                        </BarChart>
+                                                    </ResponsiveContainer>
+                                                </div>
+                                            </>
                                         )}
                                     </div>
                                 ))}
