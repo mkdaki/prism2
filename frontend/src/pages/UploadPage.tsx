@@ -52,6 +52,15 @@ export default function UploadPage() {
             <section style={{ marginTop: 16 }}>
                 <h2>CSVアップロード</h2>
 
+                <div style={{ marginBottom: 12, padding: 12, background: "#f0f8ff", border: "1px solid #b0d4f1", borderRadius: 4 }}>
+                    <p style={{ margin: 0, fontSize: 14 }}>
+                        <strong>📋 対応形式:</strong> UTF-8 または Shift_JIS（CP932）エンコーディングのCSVファイル
+                    </p>
+                    <p style={{ margin: "4px 0 0 0", fontSize: 13, color: "#555" }}>
+                        ※ Excelで保存する場合は「CSV UTF-8（カンマ区切り）」を選択してください
+                    </p>
+                </div>
+
                 <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                     <input
                         type="file"
