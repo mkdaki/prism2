@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 import os
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -23,6 +24,14 @@ from .llm import (
     build_llm_client,
 )
 from .models import Dataset, DatasetRow
+
+# D-3: ログ設定
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger("prism.backend")
 
 app = FastAPI(title="Prism Backend", version="0.1.0")
 
@@ -67,6 +76,7 @@ def health():
 @app.get("/datasets")
 def listDatasets():
     """目的: データセット一覧（行数付き）を返す。"""
+    logger.info("GET /datasets - Fetching dataset list")
     db = SessionLocal()
     try:
         statement = (
@@ -92,8 +102,10 @@ def listDatasets():
             }
             for row in results
         ]
+        logger.info(f"GET /datasets - Returning {len(datasets)} dataset(s)")
         return {"datasets": datasets}
     except SQLAlchemyError as e:
+        logger.error(f"GET /datasets - DB error: {type(e).__name__}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
     finally:
         db.close()
@@ -101,6 +113,7 @@ def listDatasets():
 @app.get("/datasets/{dataset_id}")
 def getDatasetDetail(dataset_id: int):
     """目的: 指定データセットのメタ情報・行数・先頭N行サンプルを返す。"""
+    logger.info(f"GET /datasets/{dataset_id} - Fetching dataset detail")
     db = SessionLocal()
     try:
         datasetStatement = (
@@ -127,6 +140,7 @@ def getDatasetDetail(dataset_id: int):
         )
         sampleRows = db.execute(samplesStatement).all()
 
+        logger.info(f"GET /datasets/{dataset_id} - Returning detail (rows={totalRows}, samples={len(sampleRows)})")
         return {
             "dataset_id": datasetRow.id,
             "filename": datasetRow.filename,
@@ -135,6 +149,7 @@ def getDatasetDetail(dataset_id: int):
             "samples": [{"row_index": r.row_index, "data": r.data} for r in sampleRows],
         }
     except SQLAlchemyError as e:
+        logger.error(f"GET /datasets/{dataset_id} - DB error: {type(e).__name__}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
     finally:
         db.close()
@@ -142,6 +157,7 @@ def getDatasetDetail(dataset_id: int):
 @app.get("/datasets/{dataset_id}/stats")
 def getDatasetStats(dataset_id: int):
     """目的: 指定データセットの行数・カラム一覧・各カラムの簡易要約（数値/文字列/混在）を返す。"""
+    logger.info(f"GET /datasets/{dataset_id}/stats - Computing statistics")
     db = SessionLocal()
     try:
         # 1) dataset存在チェック
@@ -257,8 +273,10 @@ def getDatasetStats(dataset_id: int):
 
             results.append(item)
 
+        logger.info(f"GET /datasets/{dataset_id}/stats - Returning stats (rows={totalRows}, columns={len(results)})")
         return {"dataset_id": dataset_id, "rows": totalRows, "columns": results}
     except SQLAlchemyError as e:
+        logger.error(f"GET /datasets/{dataset_id}/stats - DB error: {type(e).__name__}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
     finally:
         db.close()
@@ -267,18 +285,26 @@ def getDatasetStats(dataset_id: int):
 @app.get("/datasets/{dataset_id}/analysis")
 def getDatasetAnalysis(dataset_id: int, llm: LLMClient = Depends(getLlmClient)):
     """目的: B-1の集計結果を入力として、PoC用の簡易テキスト要約（LLMなし）を返す。"""
+    logger.info(f"GET /datasets/{dataset_id}/analysis - Generating analysis")
     stats = getDatasetStats(dataset_id)
     useLlm = os.getenv("ANALYSIS_USE_LLM", "0").strip() in ("1", "true", "yes", "on")
 
     if not useLlm:
+        logger.info(f"GET /datasets/{dataset_id}/analysis - Using template analysis (LLM disabled)")
         template = generate_template_analysis(stats)
         return {"dataset_id": dataset_id, **template}
 
     # B-2-1: 配線確認のため、LLM呼び出しの境界だけ用意する（品質/エラー処理はB-2-2/2-3で改善）
     generatedAt = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     try:
+        logger.info(f"GET /datasets/{dataset_id}/analysis - Calling LLM")
         text = generate_llm_analysis_text(stats, llm)
+        logger.info(f"GET /datasets/{dataset_id}/analysis - LLM call succeeded (text_length={len(text)})")
     except LLMError as e:
+        logger.error(
+            f"GET /datasets/{dataset_id}/analysis - LLM error: {type(e).__name__} - {str(e)}",
+            exc_info=True
+        )
         # B-2-3: エラーハンドリング（PoCでも最低限）
         status_code = 500
         if isinstance(e, LLMTimeoutError):
@@ -307,21 +333,82 @@ def getDatasetAnalysis(dataset_id: int, llm: LLMClient = Depends(getLlmClient)):
 @app.post("/datasets/upload")
 async def upload_dataset(file: UploadFile = File(...)):
     """目的: CSVを受け取り、DBへ保存してdataset_idと行数を返す。"""
+    logger.info(f"POST /datasets/upload - Uploading file: {file.filename}")
+    
     # 1) 拡張子ざっくりチェック（PoC）
     if not file.filename.lower().endswith(".csv"):
+        logger.warning(f"POST /datasets/upload - Invalid file extension: {file.filename}")
         raise HTTPException(status_code=400, detail="Only .csv is supported")
 
-    # 2) バイト列取得 → 文字列化（UTF-8前提。必要ならcp932等に拡張）
+    # 2) バイト列取得 → 文字列化（UTF-8優先、Shift_JIS/CP932をフォールバック）
     raw = await file.read()
+    
+    # 完全な空ファイルチェック（D-2）
+    if len(raw) == 0:
+        logger.warning(f"POST /datasets/upload - Empty file: {file.filename}")
+        raise HTTPException(
+            status_code=400,
+            detail="File is empty. Please upload a CSV file with at least a header row."
+        )
+    
+    # エンコーディング検出と変換（D-1）
+    text: str | None = None
+    detected_encoding: str | None = None
+    
+    # まずUTF-8で試行
     try:
         text = raw.decode("utf-8")
+        detected_encoding = "utf-8"
     except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="CSV must be UTF-8 encoded for now")
+        pass
+    
+    # UTF-8で失敗した場合、Shift_JIS（CP932）で試行
+    if text is None:
+        try:
+            text = raw.decode("cp932")
+            detected_encoding = "cp932"
+        except UnicodeDecodeError:
+            pass
+    
+    # どちらも失敗した場合はエラー
+    if text is None:
+        logger.warning(f"POST /datasets/upload - Unsupported encoding: {file.filename}")
+        raise HTTPException(
+            status_code=400,
+            detail="CSV encoding is not supported. Please use UTF-8 or Shift_JIS (CP932) encoding. "
+                   "You can convert your file using a text editor or save it as UTF-8 in Excel."
+        )
+    
+    logger.info(f"POST /datasets/upload - Detected encoding: {detected_encoding}")
 
+    # 3) CSV解析とバリデーション（D-2）
     reader = csv.DictReader(io.StringIO(text))
+    
+    # ヘッダー行の検証
+    if reader.fieldnames is None or len(reader.fieldnames) == 0:
+        logger.warning(f"POST /datasets/upload - No header row: {file.filename}")
+        raise HTTPException(
+            status_code=400,
+            detail="CSV has no header row. Please ensure the first row contains column names."
+        )
+    
+    # 空のカラム名をチェック
+    emptyColumns = [i for i, name in enumerate(reader.fieldnames) if not name or not name.strip()]
+    if emptyColumns:
+        logger.warning(f"POST /datasets/upload - Empty column names at positions {emptyColumns}: {file.filename}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"CSV has empty column name(s) at position(s): {emptyColumns}. "
+                   "All columns must have names."
+        )
+    
     rows = list(reader)
     if not rows:
-        raise HTTPException(status_code=400, detail="CSV is empty or has no data rows")
+        logger.warning(f"POST /datasets/upload - No data rows: {file.filename}")
+        raise HTTPException(
+            status_code=400,
+            detail="CSV has no data rows. Please ensure there is at least one data row after the header."
+        )
 
     db = SessionLocal()
     try:
@@ -333,9 +420,11 @@ async def upload_dataset(file: UploadFile = File(...)):
             db.add(DatasetRow(dataset_id=ds.id, row_index=i, data=row))
 
         db.commit()
+        logger.info(f"POST /datasets/upload - Success: dataset_id={ds.id}, rows={len(rows)}, filename={file.filename}")
         return {"dataset_id": ds.id, "rows": len(rows), "filename": file.filename}
     except SQLAlchemyError as e:
         db.rollback()
+        logger.error(f"POST /datasets/upload - DB error: {type(e).__name__}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
     finally:
         db.close()

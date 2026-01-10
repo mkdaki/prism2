@@ -439,10 +439,94 @@ docker compose -p prism2-test down -v
 
 ## フェーズD：安定性・PoC品質の底上げ（後回し可）
 
-* [ ] CSV の文字コードエラー対策（UTF-8前提明示）
-* [ ] 空 CSV / 不正 CSV のエラーハンドリング
-* [ ] Backend ログの粒度整理
-* [ ] README に「PoCでやらないこと」を再明示
+* [x] CSV の文字コードエラー対策（UTF-8前提明示）
+* [x] 空 CSV / 不正 CSV のエラーハンドリング
+* [x] Backend ログの粒度整理
+* [x] README に「PoCでやらないこと」を再明示
+
+### D-1. CSV文字コードエラー対策（完了）
+
+**実装内容:**
+- UTF-8とShift_JIS（CP932）の自動検出と変換を追加
+- フロントエンドに対応エンコーディングの注意書きを表示
+- エラーメッセージを改善（具体的な対処法を提示）
+
+**変更ファイル:**
+- `backend/app/main.py`: エンコード自動検出処理を追加
+- `frontend/src/pages/UploadPage.tsx`: 対応形式の注意書きを追加
+
+**テスト:**
+- `testPostDatasetsUploadAcceptsShiftJis`: Shift_JIS対応を確認
+
+### D-2. 空CSV/不正CSVのエラーハンドリング（完了）
+
+**実装内容:**
+- 完全な空ファイルのチェックを追加
+- ヘッダー行の検証（カラム名が空でないか）
+- エラーメッセージの改善
+
+**変更ファイル:**
+- `backend/app/main.py`: バリデーション処理を強化
+
+**テスト:**
+- `testPostDatasetsUploadRejectsCompletelyEmptyFile`: 空ファイル拒否を確認
+- `testPostDatasetsUploadRejectsEmptyColumnName`: 空カラム名拒否を確認
+- `testPostDatasetsUploadRejectsEmptyCsv`: データ行なし拒否を確認（既存）
+
+### D-3. Backendログの粒度整理（完了）
+
+**実装内容:**
+- すべてのエンドポイントにリクエスト/レスポンスログを追加
+- エラー時のスタックトレース出力（`exc_info=True`）
+- LLM呼び出し時のログ追加（成功時の文字数、失敗時の詳細）
+- アップロード時のエンコード検出ログ
+
+**変更ファイル:**
+- `backend/app/main.py`: ロギング設定と各エンドポイントへのログ追加
+
+**ログ出力例:**
+```
+2026-01-10 05:21:15 [INFO] prism.backend: POST /datasets/upload - Uploading file: sample.csv
+2026-01-10 05:21:15 [INFO] prism.backend: POST /datasets/upload - Detected encoding: utf-8
+2026-01-10 05:21:15 [INFO] prism.backend: POST /datasets/upload - Success: dataset_id=1, rows=2, filename=sample.csv
+```
+
+### D-4. READMEに「PoCでやらないこと」を再明示（完了）
+
+**実装内容:**
+- README.mdに「PoCの範囲と制約」セクションを追加
+- 実装済み機能と意図的に実装していない機能を明示
+- 本番運用に向けた推奨改善事項を列挙
+
+**追加内容:**
+- セキュリティ制約（認証・認可なし等）
+- データ永続性・バックアップなし
+- パフォーマンス・スケーラビリティの制限
+- 運用性の不足（監視、ログローテーションなし等）
+- 機密情報・プライバシー対策の不足
+- LLM関連の制約（コスト制御、プロンプトインジェクション対策なし等）
+
+**変更ファイル:**
+- `README.md`: 約100行の詳細な制約説明を追加
+
+### フェーズD完了確認（2026/01/10）
+
+**テスト実行結果:**
+```
+全32テスト通過 ✓
+カバレッジ: 89.26%（目標80%以上達成）
+```
+
+**新規追加テスト（3件）:**
+1. `testPostDatasetsUploadRejectsCompletelyEmptyFile` - 空ファイル拒否
+2. `testPostDatasetsUploadAcceptsShiftJis` - Shift_JIS対応確認
+3. `testPostDatasetsUploadRejectsEmptyColumnName` - 空カラム名拒否
+
+**変更ファイル一覧:**
+- Backend: `backend/app/main.py`（エンコード検出、バリデーション、ログ追加）
+- Frontend: `frontend/src/pages/UploadPage.tsx`（注意書き追加）
+- テスト: `backend/tests/test_datasets_upload.py`（3件追加、1件修正）
+- ドキュメント: `README.md`（PoC制約セクション追加）
 
 ---
 
