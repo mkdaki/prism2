@@ -258,3 +258,6 @@ frontend/.env.*
 !frontend/.env.example
 
 sample*.csv
+
+# 開発用のメモ類
+dev_memo/

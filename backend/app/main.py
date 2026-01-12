@@ -5,13 +5,13 @@ import os
 from datetime import datetime, timezone
 from functools import lru_cache
 
-from fastapi import Depends, FastAPI, UploadFile, File, HTTPException
+from fastapi import Depends, FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from .db import SessionLocal
-from .analysis import generate_llm_analysis_text, generate_template_analysis
+from .analysis import calculate_stats_diff, generate_llm_analysis_text, generate_template_analysis
 from .llm import (
     LLMAuthError,
     LLMClient,
@@ -109,6 +109,80 @@ def listDatasets():
         raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
     finally:
         db.close()
+
+@app.get("/datasets/compare")
+def compareDatasets(base: int, target: int):
+    """目的: 2つのデータセットの統計情報を比較し、差分を返す（E-0-2）。"""
+    logger.info(f"GET /datasets/compare?base={base}&target={target} - Comparing datasets")
+    
+    # 1. クエリパラメータの検証（同一ID指定はエラー）
+    if base == target:
+        logger.warning(f"GET /datasets/compare - Same ID specified: base={base}, target={target}")
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot compare dataset with itself. Please specify different dataset IDs."
+        )
+    
+    db = SessionLocal()
+    try:
+        # 2. 両データセットの存在チェック
+        base_dataset_statement = select(Dataset.id, Dataset.filename, Dataset.created_at).where(Dataset.id == base)
+        base_dataset_row = db.execute(base_dataset_statement).first()
+        if base_dataset_row is None:
+            logger.warning(f"GET /datasets/compare - Base dataset not found: {base}")
+            raise HTTPException(status_code=404, detail=f"Dataset not found: base={base}")
+        
+        target_dataset_statement = select(Dataset.id, Dataset.filename, Dataset.created_at).where(Dataset.id == target)
+        target_dataset_row = db.execute(target_dataset_statement).first()
+        if target_dataset_row is None:
+            logger.warning(f"GET /datasets/compare - Target dataset not found: {target}")
+            raise HTTPException(status_code=404, detail=f"Dataset not found: target={target}")
+        
+        # 3. 行数を取得
+        base_rows_statement = (
+            select(func.count(DatasetRow.id))
+            .select_from(DatasetRow)
+            .where(DatasetRow.dataset_id == base)
+        )
+        base_rows = db.execute(base_rows_statement).scalar_one()
+        
+        target_rows_statement = (
+            select(func.count(DatasetRow.id))
+            .select_from(DatasetRow)
+            .where(DatasetRow.dataset_id == target)
+        )
+        target_rows = db.execute(target_rows_statement).scalar_one()
+        
+    except SQLAlchemyError as e:
+        logger.error(f"GET /datasets/compare - DB error: {type(e).__name__}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
+    finally:
+        db.close()
+    
+    # 4. getDatasetStats() を2回呼び出して統計を取得
+    base_stats = getDatasetStats(base)
+    target_stats = getDatasetStats(target)
+    
+    # 5. 差分を計算
+    comparison = calculate_stats_diff(base_stats, target_stats)
+    
+    # 6. レスポンスを返す
+    logger.info(f"GET /datasets/compare - Success: base={base}, target={target}")
+    return {
+        "base_dataset": {
+            "dataset_id": base_dataset_row.id,
+            "filename": base_dataset_row.filename,
+            "created_at": base_dataset_row.created_at,
+            "rows": base_rows
+        },
+        "target_dataset": {
+            "dataset_id": target_dataset_row.id,
+            "filename": target_dataset_row.filename,
+            "created_at": target_dataset_row.created_at,
+            "rows": target_rows
+        },
+        "comparison": comparison
+    }
 
 @app.get("/datasets/{dataset_id}")
 def getDatasetDetail(dataset_id: int):
