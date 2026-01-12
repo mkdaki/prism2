@@ -244,3 +244,136 @@ def generate_llm_analysis_text(stats: dict, llm: LLMClient) -> str:
     return llm.generate(prompt)
 
 
+def calculate_stats_diff(base_stats: dict, target_stats: dict) -> dict:
+    """
+    目的: 2つのデータセット統計情報の差分を計算する（E-0-2）。
+    
+    Args:
+        base_stats: 基準データの統計情報（getDatasetStats の結果）
+        target_stats: 比較対象データの統計情報（getDatasetStats の結果）
+    
+    Returns:
+        差分情報を含む辞書
+    """
+    base_rows = _safe_int(base_stats.get("rows"))
+    target_rows = _safe_int(target_stats.get("rows"))
+    
+    # 行数の変化
+    rows_diff = target_rows - base_rows
+    rows_percent = (rows_diff / base_rows * 100.0) if base_rows > 0 else 0.0
+    
+    rows_change = {
+        "base": base_rows,
+        "target": target_rows,
+        "diff": rows_diff,
+        "percent": round(rows_percent, 2)
+    }
+    
+    # カラムごとの変化を計算
+    base_columns = {c["name"]: c for c in base_stats.get("columns", []) if isinstance(c, dict)}
+    target_columns = {c["name"]: c for c in target_stats.get("columns", []) if isinstance(c, dict)}
+    
+    # すべてのカラム名を取得（base と target の和集合）
+    all_column_names = sorted(set(base_columns.keys()) | set(target_columns.keys()))
+    
+    columns_change = []
+    for col_name in all_column_names:
+        base_col = base_columns.get(col_name)
+        target_col = target_columns.get(col_name)
+        
+        item = {
+            "name": col_name,
+            "kind": None,
+            "base": None,
+            "target": None,
+            "diff": None
+        }
+        
+        # kind の決定（target を優先、なければ base）
+        if target_col:
+            item["kind"] = target_col.get("kind")
+        elif base_col:
+            item["kind"] = base_col.get("kind")
+        
+        # 数値カラムの差分計算
+        if base_col and target_col:
+            base_numeric = base_col.get("numeric")
+            target_numeric = target_col.get("numeric")
+            
+            if isinstance(base_numeric, dict) and isinstance(target_numeric, dict):
+                base_min = _safe_float(base_numeric.get("min"))
+                base_max = _safe_float(base_numeric.get("max"))
+                base_avg = _safe_float(base_numeric.get("avg"))
+                
+                target_min = _safe_float(target_numeric.get("min"))
+                target_max = _safe_float(target_numeric.get("max"))
+                target_avg = _safe_float(target_numeric.get("avg"))
+                
+                item["base"] = {
+                    "min": base_min,
+                    "max": base_max,
+                    "avg": base_avg
+                }
+                item["target"] = {
+                    "min": target_min,
+                    "max": target_max,
+                    "avg": target_avg
+                }
+                
+                # 差分計算（None がある場合は None）
+                diff_min = None
+                diff_max = None
+                diff_avg = None
+                
+                if base_min is not None and target_min is not None:
+                    diff_min = round(target_min - base_min, 2)
+                if base_max is not None and target_max is not None:
+                    diff_max = round(target_max - base_max, 2)
+                if base_avg is not None and target_avg is not None:
+                    diff_avg = round(target_avg - base_avg, 2)
+                
+                item["diff"] = {
+                    "min": diff_min,
+                    "max": diff_max,
+                    "avg": diff_avg
+                }
+            else:
+                # どちらかに数値統計がない場合
+                if isinstance(base_numeric, dict):
+                    item["base"] = {
+                        "min": _safe_float(base_numeric.get("min")),
+                        "max": _safe_float(base_numeric.get("max")),
+                        "avg": _safe_float(base_numeric.get("avg"))
+                    }
+                if isinstance(target_numeric, dict):
+                    item["target"] = {
+                        "min": _safe_float(target_numeric.get("min")),
+                        "max": _safe_float(target_numeric.get("max")),
+                        "avg": _safe_float(target_numeric.get("avg"))
+                    }
+        elif base_col:
+            # target にカラムが存在しない場合
+            base_numeric = base_col.get("numeric")
+            if isinstance(base_numeric, dict):
+                item["base"] = {
+                    "min": _safe_float(base_numeric.get("min")),
+                    "max": _safe_float(base_numeric.get("max")),
+                    "avg": _safe_float(base_numeric.get("avg"))
+                }
+        elif target_col:
+            # base にカラムが存在しない場合
+            target_numeric = target_col.get("numeric")
+            if isinstance(target_numeric, dict):
+                item["target"] = {
+                    "min": _safe_float(target_numeric.get("min")),
+                    "max": _safe_float(target_numeric.get("max")),
+                    "avg": _safe_float(target_numeric.get("avg"))
+                }
+        
+        columns_change.append(item)
+    
+    return {
+        "rows_change": rows_change,
+        "columns_change": columns_change
+    }
+
