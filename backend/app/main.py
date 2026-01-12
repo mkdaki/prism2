@@ -11,7 +11,13 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from .db import SessionLocal
-from .analysis import calculate_stats_diff, generate_llm_analysis_text, generate_template_analysis
+from .analysis import (
+    calculate_stats_diff,
+    generate_comparison_analysis_text,
+    generate_comparison_template_analysis,
+    generate_llm_analysis_text,
+    generate_template_analysis,
+)
 from .llm import (
     LLMAuthError,
     LLMClient,
@@ -109,6 +115,112 @@ def listDatasets():
         raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
     finally:
         db.close()
+
+@app.get("/datasets/compare/analysis")
+def compareDatasetAnalysis(base: int, target: int, llm: LLMClient = Depends(getLlmClient)):
+    """目的: 2つのデータセットの差分を分析し、LLMによる推移分析テキストを返す（E-0-3）"""
+    logger.info(f"GET /datasets/compare/analysis?base={base}&target={target} - Generating comparison analysis")
+    
+    # 1. 比較結果を取得（E-0-2のエンドポイントを再利用）
+    comparison_data = compareDatasets(base, target)
+    
+    # 2. LLM使用の判定
+    use_llm = os.getenv("ANALYSIS_USE_LLM", "0").strip() in ("1", "true", "yes", "on")
+    
+    if not use_llm:
+        logger.info(f"GET /datasets/compare/analysis - Using template analysis (LLM disabled)")
+        template = generate_comparison_template_analysis(comparison_data)
+        
+        # comparison_summary を作成（簡易版）
+        comparison = comparison_data.get("comparison") or {}
+        rows_change = comparison.get("rows_change") or {}
+        
+        return {
+            "base_dataset": comparison_data.get("base_dataset"),
+            "target_dataset": comparison_data.get("target_dataset"),
+            "comparison_summary": {
+                "rows_change": rows_change,
+                "significant_changes": []  # テンプレート版では省略
+            },
+            **template
+        }
+    
+    # 3. LLMによる推移分析
+    generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    try:
+        logger.info(f"GET /datasets/compare/analysis - Calling LLM")
+        text = generate_comparison_analysis_text(comparison_data, llm)
+        logger.info(f"GET /datasets/compare/analysis - LLM call succeeded (text_length={len(text)})")
+    except LLMError as e:
+        logger.error(
+            f"GET /datasets/compare/analysis - LLM error: {type(e).__name__} - {str(e)}",
+            exc_info=True
+        )
+        # B-2-3: エラーハンドリング（PoCでも最低限）
+        status_code = 500
+        if isinstance(e, LLMTimeoutError):
+            status_code = 504
+        elif isinstance(e, LLMRateLimitError):
+            status_code = 503
+        elif isinstance(e, LLMAuthError):
+            status_code = 503
+        elif isinstance(e, LLMInputTooLargeError):
+            status_code = 413
+        elif isinstance(e, LLMProviderError):
+            status_code = 502
+        
+        raise HTTPException(
+            status_code=status_code,
+            detail={
+                "error": {
+                    "code": getattr(e, "code", "LLM_ERROR"),
+                    "message": str(e),
+                    "retryable": bool(getattr(e, "retryable", False)),
+                }
+            },
+        )
+    
+    # 4. comparison_summary を作成（注目すべき変化を抽出）
+    comparison = comparison_data.get("comparison") or {}
+    rows_change = comparison.get("rows_change") or {}
+    columns_change = comparison.get("columns_change") or []
+    
+    significant_changes = []
+    for col in columns_change:
+        if not isinstance(col, dict):
+            continue
+        
+        col_name = col.get("name")
+        diff_stats = col.get("diff")
+        base_stats = col.get("base")
+        target_stats = col.get("target")
+        
+        # 数値カラムで平均値が変化している場合
+        if isinstance(diff_stats, dict) and isinstance(base_stats, dict) and isinstance(target_stats, dict):
+            diff_avg = diff_stats.get("avg")
+            base_avg = base_stats.get("avg")
+            target_avg = target_stats.get("avg")
+            
+            if diff_avg is not None and diff_avg != 0:
+                significant_changes.append({
+                    "column": col_name,
+                    "type": "avg",
+                    "base": base_avg,
+                    "target": target_avg,
+                    "diff": diff_avg
+                })
+    
+    # 5. レスポンス返却
+    return {
+        "base_dataset": comparison_data.get("base_dataset"),
+        "target_dataset": comparison_data.get("target_dataset"),
+        "comparison_summary": {
+            "rows_change": rows_change,
+            "significant_changes": significant_changes
+        },
+        "analysis_text": text,
+        "generated_at": generated_at
+    }
 
 @app.get("/datasets/compare")
 def compareDatasets(base: int, target: int):

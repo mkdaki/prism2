@@ -244,6 +244,212 @@ def generate_llm_analysis_text(stats: dict, llm: LLMClient) -> str:
     return llm.generate(prompt)
 
 
+def build_comparison_prompt_v1(comparison_data: dict) -> str:
+    """
+    目的: 2つのデータセットの比較結果からLLM用プロンプトを生成する（E-0-3）
+    
+    Args:
+        comparison_data: compareDatasets() の返り値
+            - base_dataset: {dataset_id, filename, created_at, rows}
+            - target_dataset: {dataset_id, filename, created_at, rows}
+            - comparison: {rows_change, columns_change}
+    
+    Returns:
+        LLMに送信するプロンプト文字列
+    """
+    base = comparison_data.get("base_dataset") or {}
+    target = comparison_data.get("target_dataset") or {}
+    comparison = comparison_data.get("comparison") or {}
+    
+    rows_change = comparison.get("rows_change") or {}
+    columns_change = comparison.get("columns_change") or []
+    
+    # メタ情報の抽出
+    base_filename = base.get("filename", "不明")
+    base_created_at = str(base.get("created_at", "不明"))
+    base_rows = rows_change.get("base", 0)
+    
+    target_filename = target.get("filename", "不明")
+    target_created_at = str(target.get("created_at", "不明"))
+    target_rows = rows_change.get("target", 0)
+    
+    rows_diff = rows_change.get("diff", 0)
+    rows_percent = rows_change.get("percent", 0.0)
+    
+    # 統計差分の整形
+    diff_lines = []
+    diff_lines.append(f"- 行数: {base_rows} → {target_rows} ({rows_diff:+d}件, {rows_percent:+.1f}%)")
+    
+    # 数値カラムの変化を抽出
+    for col in columns_change:
+        if not isinstance(col, dict):
+            continue
+        
+        col_name = col.get("name", "不明")
+        col_kind = col.get("kind", "")
+        base_stats = col.get("base")
+        target_stats = col.get("target")
+        diff_stats = col.get("diff")
+        
+        # 数値カラムで両方に統計があり、差分がある場合のみ出力
+        if (col_kind in ("number", "mixed") and 
+            isinstance(base_stats, dict) and 
+            isinstance(target_stats, dict) and 
+            isinstance(diff_stats, dict)):
+            
+            # 平均値の変化
+            base_avg = base_stats.get("avg")
+            target_avg = target_stats.get("avg")
+            diff_avg = diff_stats.get("avg")
+            if base_avg is not None and target_avg is not None and diff_avg is not None:
+                percent_change = (diff_avg / base_avg * 100.0) if base_avg != 0 else 0.0
+                diff_lines.append(
+                    f"- {col_name}（数値）: 平均 {base_avg:.1f} → {target_avg:.1f} "
+                    f"({diff_avg:+.1f}, {percent_change:+.1f}%)"
+                )
+            
+            # 最小値の変化
+            base_min = base_stats.get("min")
+            target_min = target_stats.get("min")
+            diff_min = diff_stats.get("min")
+            if base_min is not None and target_min is not None and diff_min is not None and diff_min != 0:
+                diff_lines.append(
+                    f"- {col_name}（数値）: 最小値 {base_min:.1f} → {target_min:.1f} ({diff_min:+.1f})"
+                )
+            
+            # 最大値の変化
+            base_max = base_stats.get("max")
+            target_max = target_stats.get("max")
+            diff_max = diff_stats.get("max")
+            if base_max is not None and target_max is not None and diff_max is not None and diff_max != 0:
+                diff_lines.append(
+                    f"- {col_name}（数値）: 最大値 {base_max:.1f} → {target_max:.1f} ({diff_max:+.1f})"
+                )
+    
+    diff_summary = "\n".join(diff_lines) if diff_lines else "- 有意な変化はありません"
+    
+    # プロンプトの構築
+    instructions = (
+        "あなたはデータアナリストです。以下の2つのデータセットの統計差分を分析し、\n"
+        "変化の要点を簡潔に報告してください。\n"
+        "\n"
+        f"【基準データ】\n"
+        f"ファイル名: {base_filename}\n"
+        f"作成日時: {base_created_at}\n"
+        f"行数: {base_rows}\n"
+        "\n"
+        f"【比較対象データ】\n"
+        f"ファイル名: {target_filename}\n"
+        f"作成日時: {target_created_at}\n"
+        f"行数: {target_rows}\n"
+        "\n"
+        f"【統計差分】\n"
+        f"{diff_summary}\n"
+        "\n"
+        "制約:\n"
+        "- 統計差分に根拠がないことは断定しない。推測する場合は推測と明記する。\n"
+        "- 過度な断定を避け、控えめな表現を使う。\n"
+        "- 数値の変化率を具体的に指摘する。\n"
+        "- 個人情報・機微情報の可能性がある値を、必要以上に繰り返さない。\n"
+        "\n"
+        "出力フォーマット（必ずこの順で）:\n"
+        "## 変化の概要\n"
+        "- ...\n"
+        "## 注目すべき変化\n"
+        "- ...\n"
+        "## トレンド分析\n"
+        "- ...\n"
+        "## 前提・限界\n"
+        "- ...\n"
+    )
+    
+    return instructions
+
+
+def generate_comparison_template_analysis(comparison_data: dict) -> dict:
+    """
+    目的: LLMなしで比較結果から簡易要約を生成する（E-0-3、テスト用）
+    
+    Args:
+        comparison_data: compareDatasets() の返り値
+    
+    Returns:
+        {generated_at, analysis_text}
+    """
+    base = comparison_data.get("base_dataset") or {}
+    target = comparison_data.get("target_dataset") or {}
+    comparison = comparison_data.get("comparison") or {}
+    
+    rows_change = comparison.get("rows_change") or {}
+    columns_change = comparison.get("columns_change") or []
+    
+    base_filename = base.get("filename", "不明")
+    target_filename = target.get("filename", "不明")
+    
+    base_rows = rows_change.get("base", 0)
+    target_rows = rows_change.get("target", 0)
+    rows_diff = rows_change.get("diff", 0)
+    rows_percent = rows_change.get("percent", 0.0)
+    
+    # 数値カラムの変化をカウント
+    numeric_changes = []
+    for col in columns_change:
+        if not isinstance(col, dict):
+            continue
+        
+        col_name = col.get("name", "不明")
+        diff_stats = col.get("diff")
+        
+        if isinstance(diff_stats, dict):
+            diff_avg = diff_stats.get("avg")
+            if diff_avg is not None and diff_avg != 0:
+                numeric_changes.append(col_name)
+    
+    lines = []
+    lines.append("これはPoCのため、比較結果から自動生成した簡易要約です（LLM未接続）。")
+    lines.append("")
+    lines.append("## 変化の概要")
+    lines.append(f"- 基準データ: {base_filename} ({base_rows}行)")
+    lines.append(f"- 比較対象データ: {target_filename} ({target_rows}行)")
+    lines.append(f"- 行数の変化: {rows_diff:+d}件 ({rows_percent:+.1f}%)")
+    lines.append("")
+    lines.append("## 注目すべき変化")
+    if numeric_changes:
+        lines.append(f"- 数値カラムの変化: {', '.join(numeric_changes[:5])}")
+    else:
+        lines.append("- 有意な数値変化は検出されませんでした")
+    lines.append("")
+    lines.append("## トレンド分析")
+    if rows_diff > 0:
+        lines.append("- データ件数が増加傾向にあります")
+    elif rows_diff < 0:
+        lines.append("- データ件数が減少傾向にあります")
+    else:
+        lines.append("- データ件数に変化はありません")
+    lines.append("")
+    lines.append("## 前提・限界")
+    lines.append("- この要約はテンプレートベースで生成されており、深い洞察は含まれません")
+    lines.append("- 詳細な分析には LLM を有効化してください")
+    
+    generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return {"generated_at": generated_at, "analysis_text": "\n".join(lines)}
+
+
+def generate_comparison_analysis_text(comparison_data: dict, llm: LLMClient) -> str:
+    """
+    目的: 比較結果からLLMによる推移分析テキストを生成する（E-0-3）
+    
+    Args:
+        comparison_data: compareDatasets() の返り値
+        llm: LLMクライアント
+    
+    Returns:
+        LLM生成の分析テキスト
+    """
+    prompt = build_comparison_prompt_v1(comparison_data)
+    return llm.generate(prompt)
+
+
 def calculate_stats_diff(base_stats: dict, target_stats: dict) -> dict:
     """
     目的: 2つのデータセット統計情報の差分を計算する（E-0-2）。

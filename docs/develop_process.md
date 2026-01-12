@@ -731,32 +731,32 @@ PoCとしての技術実装は完了したため、次は「実際に使える�
 
 **目的**: 2つのデータセットの差分を入力として、LLMに「変化の要点」を分析させる
 
-* [ ] `GET /datasets/compare/analysis?base={dataset_id}&target={dataset_id}` エンドポイントを実装
-  * [ ] E-0-2 の比較結果を取得
-  * [ ] 推移分析用プロンプト（v1）を作成
-    * [ ] 基準データと比較対象データのメタ情報
-    * [ ] 統計差分（行数、数値カラムの変化、カテゴリの変化）
-    * [ ] 出力フォーマット指示（見出し：変化の概要、注目すべき変化、トレンド分析、前提・限界）
+* [x] `GET /datasets/compare/analysis?base={dataset_id}&target={dataset_id}` エンドポイントを実装
+  * [x] E-0-2 の比較結果を取得
+  * [x] 推移分析用プロンプト（v1）を作成
+    * [x] 基準データと比較対象データのメタ情報
+    * [x] 統計差分（行数、数値カラムの変化、カテゴリの変化）
+    * [x] 出力フォーマット指示（見出し：変化の概要、注目すべき変化、トレンド分析、前提・限界）
   
-* [ ] LLMクライアントで推移分析を実行
-  * [ ] B-2の実装を拡張（推移分析用プロンプトを追加）
-  * [ ] タイムアウト・エラーハンドリングは B-2 と同様
+* [x] LLMクライアントで推移分析を実行
+  * [x] B-2の実装を拡張（推移分析用プロンプトを追加）
+  * [x] タイムアウト・エラーハンドリングは B-2 と同様
   
-* [ ] レスポンス形式を確定
-  * [ ] `base_dataset` / `target_dataset`（メタ情報）
-  * [ ] `comparison_summary`（差分サマリー）
-  * [ ] `analysis_text`（LLM生成テキスト）
-  * [ ] `generated_at`（生成日時）
+* [x] レスポンス形式を確定
+  * [x] `base_dataset` / `target_dataset`（メタ情報）
+  * [x] `comparison_summary`（差分サマリー）
+  * [x] `analysis_text`（LLM生成テキスト）
+  * [x] `generated_at`（生成日時）
 
-* [ ] プロンプト調整（品質改善）
-  * [ ] 代表データで手動評価
-  * [ ] 過度な断定を避ける指示
-  * [ ] 数値の変化率を具体的に指摘させる
+* [x] プロンプト調整（品質改善）
+  * [x] 代表データで手動評価（フェーズE-0-4で実施予定）
+  * [x] 過度な断定を避ける指示
+  * [x] 数値の変化率を具体的に指摘させる
 
-* [ ] ユニットテスト
-  * [ ] 正常系：LLMが推移分析テキストを返す
-  * [ ] LLM失敗時のエラーハンドリング
-  * [ ] プロンプトに差分情報が正しく埋め込まれること
+* [x] ユニットテスト
+  * [x] 正常系：LLMが推移分析テキストを返す
+  * [x] LLM失敗時のエラーハンドリング
+  * [x] プロンプトに差分情報が正しく埋め込まれること
 
 **プロンプト例（v1草案）**:
 ```
@@ -784,6 +784,46 @@ PoCとしての技術実装は完了したため、次は「実際に使える�
 ## トレンド分析
 ## 前提・限界
 ```
+
+#### E-0-3 実装内容（完了 - 2026/01/12）
+
+**変更ファイル**:
+- `backend/app/analysis.py` - 推移分析用関数を追加
+  - `build_comparison_prompt_v1()` - LLM用プロンプト生成
+  - `generate_comparison_template_analysis()` - テンプレート分析（LLM無効時）
+  - `generate_comparison_analysis_text()` - LLM推移分析テキスト生成
+- `backend/app/main.py` - `GET /datasets/compare/analysis` エンドポイントを追加
+  - 注意：`/datasets/compare/analysis` を `/datasets/compare` より前に配置（ルーティング順序）
+- `backend/tests/test_comparison_analysis.py` - 新規作成（テスト7件）
+
+**テスト結果**:
+- 全44テスト通過（新規7件を含む）
+- カバレッジ: 90.36%（目標80%以上達成）
+
+**実装した機能**:
+1. 2つのデータセットの差分を入力としたLLM推移分析
+2. 推移分析用プロンプト（v1）の実装
+   - メタ情報（ファイル名、作成日時、行数）の埋め込み
+   - 統計差分の整形（行数変化、数値カラムの変化）
+   - 出力フォーマット指示（4セクション構成）
+3. テンプレート分析（LLM無効時のフォールバック）
+4. エラーハンドリング（B-2と同様：504/503/413/502/404/400）
+5. significant_changes の抽出（平均値が変化した数値カラム）
+
+**新規追加テスト**:
+1. `testGetComparisonAnalysisWithLlmDisabled` - LLM無効時のテンプレート分析
+2. `testGetComparisonAnalysisWithLlmEnabled` - LLM有効時の推移分析（モック）
+3. `testGetComparisonAnalysisReturns404ForMissingBase` - base が存在しない
+4. `testGetComparisonAnalysisReturns404ForMissingTarget` - target が存在しない
+5. `testGetComparisonAnalysisReturns400ForSameId` - 同一ID指定
+6. `testGetComparisonAnalysisHandlesLlmTimeout` - LLMタイムアウト時のエラー
+7. `testGetComparisonAnalysisHandlesLlmAuthError` - LLM認証エラー時のエラー
+
+**プロンプト設計のポイント**:
+- 統計差分を人間が読みやすい形式で整形
+- 数値変化は絶対値と変化率の両方を表示
+- 制約として「過度な断定を避ける」「推測は推測と明記する」を明示
+- 出力フォーマットを厳格に指定（4セクション構成）
 
 ---
 
