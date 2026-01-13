@@ -1114,13 +1114,104 @@ curl -s "http://localhost:8001/datasets/compare/analysis?base=6&target=7" | pyth
 
 ---
 
-* [ ] E-1-2. 分析結果のコピー/エクスポート機能
-  * [ ] 分析結果テキストのコピーボタンを追加（クリップボードAPI利用）
-  * [ ] 分析結果のMarkdownエクスポート機能を追加
-    * [ ] ファイル名：`analysis_{dataset_id}_{YYYYMMDD}.md`
-    * [ ] 内容：メタ情報 + 統計サマリー + LLM分析結果
-  * [ ] 統計情報のCSVエクスポート機能を追加（オプション）
-  * [ ] ユニットテストを追加（エクスポート処理の検証）
+* [x] E-1-2. 分析結果のコピー/エクスポート機能
+  * [x] 分析結果テキストのコピーボタンを追加（クリップボードAPI利用）
+  * [x] 分析結果のMarkdownエクスポート機能を追加
+    * [x] ファイル名：`analysis_{dataset_id}_{YYYYMMDD}.md`
+    * [x] 内容：メタ情報 + 統計サマリー + LLM分析結果
+  * [x] 統計情報のCSVエクスポート機能を追加（オプション）
+  * [x] ユニットテストを追加（エクスポート処理の検証）
+
+#### E-1-2 実装内容（完了 - 2026/01/13）
+
+**変更ファイル**:
+- `frontend/src/pages/DatasetDetailPage.tsx` - 3つのエクスポート機能を追加
+  - `copyToClipboard()` - クリップボードAPIを使用した分析結果のコピー
+  - `exportAnalysisAsMarkdown()` - Markdown形式でのエクスポート（メタ情報+統計+分析結果）
+  - `exportStatsAsCsv()` - 統計情報のCSVエクスポート（BOM付きUTF-8）
+- `frontend/src/pages/DatasetComparePage.tsx` - 推移比較画面に同様の機能を追加
+  - `copyToClipboard()` - 推移分析結果のコピー
+  - `exportComparisonAsMarkdown()` - 推移比較結果のMarkdownエクスポート
+
+**テスト結果**:
+- フロントエンドユニットテスト: 20件すべて通過 ✓
+- ビルド: 成功 ✓
+- Lintエラー: なし ✓
+
+**実装した機能**:
+1. **分析結果のコピーボタン**
+   - クリップボードAPI (`navigator.clipboard.writeText`) を使用
+   - ボタンクリックでワンクリックコピー
+   - 成功時にアラート通知
+
+2. **Markdownエクスポート機能**
+   - ファイル名形式: `analysis_{dataset_id}_{YYYYMMDD}.md` / `comparison_{base}_{target}_{YYYYMMDD}.md`
+   - 内容:
+     - メタ情報（データセットID、ファイル名、作成日時、行数）
+     - 統計サマリー（カラム情報、数値統計、頻出値）
+     - LLM分析結果（全文）
+   - Blob + URL.createObjectURL を使用してダウンロード
+
+3. **統計情報のCSVエクスポート機能**
+   - ファイル名形式: `stats_{dataset_id}_{YYYYMMDD}.csv`
+   - BOM付きUTF-8で出力（Excel対応）
+   - カラムごとの統計情報を表形式で出力
+   - 数値統計（件数、最小、平均、最大）と頻出値（上位3つ）を含む
+
+4. **UIの配置**
+   - 各セクションの見出し横にボタンを配置
+   - 色分け：コピー（青）、Markdownエクスポート（オレンジ）、CSVエクスポート（緑）
+   - 絵文字アイコンで視認性向上
+
+**技術的な実装ポイント**:
+- クリップボードAPI: モダンブラウザの標準API、非同期処理
+- Blob API: ファイル生成に使用、UTF-8エンコーディング
+- BOM付きUTF-8: CSVをExcelで正しく開くために必要（`\uFEFF`）
+- URL.createObjectURL: ダウンロード後にrevokeしてメモリリーク防止
+
+**ユーザー体験の改善**:
+- 分析結果を簡単にSlack、メール、ドキュメントに共有可能
+- Markdown形式でバージョン管理（Git等）に保存可能
+- CSV形式でExcelやBIツールでの二次分析が可能
+- E2実ユーザーテストでのフィードバック収集に有効
+
+**開発フローの学び（今回の反省点）**:
+
+1. **ローカルビルドの冗長性**
+   - 誤り: `npm test` の後に `npm run build` を実行していた
+   - 理由: `npm test` で既に TypeScript のコンパイルチェックは完了している
+   - 改善: ローカルでの `npm run build` は省略可能
+   - ローカルビルドの成果物 (`frontend/dist/`) は Docker ビルドでは使われない
+   - Docker コンテナ内で再度ビルドされるため、ローカルビルドは不要
+
+2. **ドキュメント更新のタイミング**
+   - 誤り: ブラウザでの動作確認前に `develop_process.md` を「完了」として更新してしまった
+   - 理由: 実際にボタンを押して動作確認する前に記録してしまった
+   - 改善: **必ずブラウザでの動作確認後にドキュメントを更新する**
+
+3. **正しい開発フロー（フロントエンド機能追加時）**
+   ```bash
+   # 1. 実装
+   # 2. ユニットテスト実行
+   cd frontend && npm test
+   
+   # 3. Dockerビルド・起動
+   docker compose build --no-cache frontend
+   docker compose up -d frontend
+   
+   # 4. 【重要】ブラウザでの動作確認（必須！）
+   # - http://localhost:3001 にアクセス
+   # - 各機能を実際に操作
+   # - 期待通りの動作をすることを確認
+   # - エラーが出ないことを確認
+   
+   # 5. すべて確認できてから develop_process.md を更新
+   ```
+
+4. **テストの役割の理解**
+   - ユニットテスト (`npm test`): ロジックの正しさ、型の整合性を確認
+   - ブラウザテスト: 実際のUI動作、ユーザー体験を確認
+   - **両方とも必要**。ユニットテストが通っても、実際の動作確認は必須
 
 * [ ] E-1-3. UI/UXの微調整（任意）
   * [ ] ローディング中の表示改善（スピナー、プログレスバー）
