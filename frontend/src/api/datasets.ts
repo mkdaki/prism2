@@ -53,6 +53,69 @@ export type DatasetAnalysis = {
     analysis_text: string;
 };
 
+export type DatasetComparisonResponse = {
+    base_dataset: {
+        dataset_id: number;
+        filename: string;
+        created_at: string;
+        rows: number;
+    };
+    target_dataset: {
+        dataset_id: number;
+        filename: string;
+        created_at: string;
+        rows: number;
+    };
+    comparison: {
+        rows_change: {
+            base: number;
+            target: number;
+            diff: number;
+            percent: number;
+        };
+        columns_change: Array<{
+            name: string;
+            kind: string;
+            base: Record<string, number> | null;
+            target: Record<string, number> | null;
+            diff: Record<string, number> | null;
+        }>;
+    };
+};
+
+export type ComparisonAnalysisResponse = {
+    base_dataset: {
+        dataset_id: number;
+        filename: string;
+        created_at: string;
+        rows: number;
+    };
+    target_dataset: {
+        dataset_id: number;
+        filename: string;
+        created_at: string;
+        rows: number;
+    };
+    comparison_summary: {
+        rows_change: {
+            base: number;
+            target: number;
+            diff: number;
+            percent: number;
+        };
+        significant_changes: Array<{
+            column_name: string;
+            change_type: string;
+            base_value: number;
+            target_value: number;
+            diff: number;
+            percent: number;
+        }>;
+    };
+    analysis_text: string;
+    generated_at: string;
+};
+
 export type UploadDatasetOptions = {
     apiBaseUrl?: string;
     signal?: AbortSignal;
@@ -176,5 +239,41 @@ export async function getDatasetAnalysis(datasetId: number, options?: UploadData
     }
 
     const json = (await response.json()) as DatasetAnalysis;
+    return json;
+}
+
+export async function compareDatasets(baseId: number, targetId: number, options?: UploadDatasetOptions): Promise<DatasetComparisonResponse> {
+    /** 目的: `GET /datasets/compare` から2つのデータセットの統計差分を取得する。 */
+    const apiBaseUrl = getApiBaseUrl(options);
+
+    const response = await fetch(`${apiBaseUrl}/datasets/compare?base=${baseId}&target=${targetId}`, {
+        method: "GET",
+        signal: options?.signal,
+    });
+
+    if (!response.ok) {
+        const detail = await parseErrorDetail(response);
+        throw new Error(detail);
+    }
+
+    const json = (await response.json()) as DatasetComparisonResponse;
+    return json;
+}
+
+export async function getComparisonAnalysis(baseId: number, targetId: number, options?: UploadDatasetOptions): Promise<ComparisonAnalysisResponse> {
+    /** 目的: `GET /datasets/compare/analysis` から2つのデータセットのLLM推移分析を取得する。 */
+    const apiBaseUrl = getApiBaseUrl(options);
+
+    const response = await fetch(`${apiBaseUrl}/datasets/compare/analysis?base=${baseId}&target=${targetId}`, {
+        method: "GET",
+        signal: options?.signal,
+    });
+
+    if (!response.ok) {
+        const detail = await parseErrorDetail(response);
+        throw new Error(detail);
+    }
+
+    const json = (await response.json()) as ComparisonAnalysisResponse;
     return json;
 }

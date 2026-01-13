@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { uploadDataset, getDatasets, getDatasetDetail, getDatasetStats, getDatasetAnalysis } from "./datasets";
+import { uploadDataset, getDatasets, getDatasetDetail, getDatasetStats, getDatasetAnalysis, compareDatasets, getComparisonAnalysis } from "./datasets";
 
 describe("uploadDataset", () => {
     beforeEach(() => {
@@ -310,5 +310,192 @@ describe("getDatasetAnalysis", () => {
         vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
         await expect(getDatasetAnalysis(1, { apiBaseUrl: "http://example.test" })).rejects.toThrow("HTTP 504");
+    });
+});
+
+describe("compareDatasets", () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("2つのデータセットの統計差分を取得できる", async () => {
+        const mockJson = {
+            base_dataset: {
+                dataset_id: 1,
+                filename: "test_base.csv",
+                created_at: "2026-01-01T00:00:00Z",
+                rows: 100,
+            },
+            target_dataset: {
+                dataset_id: 2,
+                filename: "test_target.csv",
+                created_at: "2026-01-08T00:00:00Z",
+                rows: 105,
+            },
+            comparison: {
+                rows_change: {
+                    base: 100,
+                    target: 105,
+                    diff: 5,
+                    percent: 5.0,
+                },
+                columns_change: [
+                    {
+                        name: "price",
+                        kind: "number",
+                        base: { min: 1000, max: 5000, avg: 3000 },
+                        target: { min: 1100, max: 5200, avg: 3150 },
+                        diff: { min: 100, max: 200, avg: 150 },
+                    },
+                ],
+            },
+        };
+
+        const fetchMock = vi.fn(async () => {
+            return new Response(JSON.stringify(mockJson), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            });
+        });
+        vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+        const actual = await compareDatasets(1, 2, { apiBaseUrl: "http://example.test" });
+
+        expect(actual).toEqual(mockJson);
+        expect(actual.comparison.rows_change.diff).toBe(5);
+        expect(actual.comparison.columns_change).toHaveLength(1);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toBe("http://example.test/datasets/compare?base=1&target=2");
+        expect(init.method).toBe("GET");
+    });
+
+    it("存在しないIDで404エラーを投げる", async () => {
+        const fetchMock = vi.fn(async () => {
+            return new Response(JSON.stringify({ detail: "Dataset not found" }), {
+                status: 404,
+                headers: { "Content-Type": "application/json" },
+            });
+        });
+        vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+        await expect(compareDatasets(1, 999, { apiBaseUrl: "http://example.test" })).rejects.toThrow("Dataset not found");
+    });
+
+    it("同一ID指定で400エラーを投げる", async () => {
+        const fetchMock = vi.fn(async () => {
+            return new Response(JSON.stringify({ detail: "base and target must be different" }), {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+            });
+        });
+        vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+        await expect(compareDatasets(1, 1, { apiBaseUrl: "http://example.test" })).rejects.toThrow("base and target must be different");
+    });
+});
+
+describe("getComparisonAnalysis", () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("2つのデータセットのLLM推移分析を取得できる", async () => {
+        const mockJson = {
+            base_dataset: {
+                dataset_id: 1,
+                filename: "test_base.csv",
+                created_at: "2026-01-01T00:00:00Z",
+                rows: 100,
+            },
+            target_dataset: {
+                dataset_id: 2,
+                filename: "test_target.csv",
+                created_at: "2026-01-08T00:00:00Z",
+                rows: 105,
+            },
+            comparison_summary: {
+                rows_change: {
+                    base: 100,
+                    target: 105,
+                    diff: 5,
+                    percent: 5.0,
+                },
+                significant_changes: [
+                    {
+                        column_name: "price",
+                        change_type: "avg",
+                        base_value: 3000,
+                        target_value: 3150,
+                        diff: 150,
+                        percent: 5.0,
+                    },
+                ],
+            },
+            analysis_text: "## 変化の概要\n行数が5件増加しました（5.0%増）。\n\n## 注目すべき変化\npriceカラムの平均値が3000から3150に上昇しています。",
+            generated_at: "2026-01-10T12:00:00Z",
+        };
+
+        const fetchMock = vi.fn(async () => {
+            return new Response(JSON.stringify(mockJson), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            });
+        });
+        vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+        const actual = await getComparisonAnalysis(1, 2, { apiBaseUrl: "http://example.test" });
+
+        expect(actual).toEqual(mockJson);
+        expect(actual.analysis_text).toContain("変化の概要");
+        expect(actual.comparison_summary.significant_changes).toHaveLength(1);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toBe("http://example.test/datasets/compare/analysis?base=1&target=2");
+        expect(init.method).toBe("GET");
+    });
+
+    it("存在しないIDで404エラーを投げる", async () => {
+        const fetchMock = vi.fn(async () => {
+            return new Response(JSON.stringify({ detail: "Dataset not found" }), {
+                status: 404,
+                headers: { "Content-Type": "application/json" },
+            });
+        });
+        vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+        await expect(getComparisonAnalysis(1, 999, { apiBaseUrl: "http://example.test" })).rejects.toThrow("Dataset not found");
+    });
+
+    it("LLMエラー時に適切なエラーを投げる", async () => {
+        const fetchMock = vi.fn(async () => {
+            return new Response(
+                JSON.stringify({
+                    detail: {
+                        error: {
+                            code: "LLM_TIMEOUT",
+                            message: "LLM request timed out",
+                            retryable: true,
+                        },
+                    },
+                }),
+                {
+                    status: 504,
+                    statusText: "Gateway Timeout",
+                    headers: { "Content-Type": "application/json" },
+                }
+            );
+        });
+        vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+        await expect(getComparisonAnalysis(1, 2, { apiBaseUrl: "http://example.test" })).rejects.toThrow("HTTP 504");
     });
 });
