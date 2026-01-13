@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.db import engine
+from app.db import engine, SessionLocal
 from app.main import app
 
 
@@ -36,6 +36,16 @@ def client() -> TestClient:
     """目的: FastAPIのTestClientを提供し、startup/shutdownイベントを確実に実行する。"""
     with TestClient(app) as testClient:
         yield testClient
+
+
+@pytest.fixture()
+def db():
+    """目的: テスト内で直接DBをクエリできるようにSessionLocalを提供する。"""
+    database = SessionLocal()
+    try:
+        yield database
+    finally:
+        database.close()
 
 
 @pytest.fixture(autouse=True)

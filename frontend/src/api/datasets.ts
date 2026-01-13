@@ -277,3 +277,20 @@ export async function getComparisonAnalysis(baseId: number, targetId: number, op
     const json = (await response.json()) as ComparisonAnalysisResponse;
     return json;
 }
+
+export async function deleteDataset(datasetId: number, options?: UploadDatasetOptions): Promise<void> {
+    /** 目的: `DELETE /datasets/{dataset_id}` でデータセットを削除する（E-1-1）。 */
+    const apiBaseUrl = getApiBaseUrl(options);
+
+    const response = await fetch(`${apiBaseUrl}/datasets/${datasetId}`, {
+        method: "DELETE",
+        signal: options?.signal,
+    });
+
+    if (!response.ok) {
+        const detail = await parseErrorDetail(response);
+        throw new Error(detail);
+    }
+
+    // 204 No Content なので何も返さない
+}

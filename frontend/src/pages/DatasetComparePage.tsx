@@ -60,6 +60,78 @@ export default function DatasetComparePage() {
         return "#666"; // グレー（変化なし）
     };
 
+    const copyToClipboard = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            alert("クリップボードにコピーしました");
+        } catch (err) {
+            alert("コピーに失敗しました");
+        }
+    };
+
+    const exportComparisonAsMarkdown = () => {
+        if (!comparison || !analysis) return;
+
+        const date = new Date().toISOString().split("T")[0].replace(/-/g, "");
+        const filename = `comparison_${baseId}_${targetId}_${date}.md`;
+
+        // 統計差分サマリーを作成
+        let statsSummary = "### 統計差分\n\n";
+        statsSummary += `#### 行数変化\n\n`;
+        statsSummary += `- 基準: ${comparison.comparison.rows_change.base}件\n`;
+        statsSummary += `- 比較: ${comparison.comparison.rows_change.target}件\n`;
+        statsSummary += `- 差分: ${comparison.comparison.rows_change.diff > 0 ? "+" : ""}${
+            comparison.comparison.rows_change.diff
+        }件 (${formatPercent(comparison.comparison.rows_change.percent)})\n\n`;
+
+        statsSummary += `#### カラムごとの変化\n\n`;
+        comparison.comparison.columns_change.forEach((col) => {
+            statsSummary += `- **${col.name}** (${col.kind})\n`;
+            if (col.kind === "number" && col.base && col.target && col.diff) {
+                statsSummary += `  - 基準: min=${col.base.min}, avg=${col.base.avg.toFixed(1)}, max=${col.base.max}\n`;
+                statsSummary += `  - 比較: min=${col.target.min}, avg=${col.target.avg.toFixed(1)}, max=${col.target.max}\n`;
+                statsSummary += `  - 差分: min=${col.diff.min > 0 ? "+" : ""}${col.diff.min.toFixed(
+                    1
+                )}, avg=${col.diff.avg > 0 ? "+" : ""}${col.diff.avg.toFixed(1)}, max=${col.diff.max > 0 ? "+" : ""}${col.diff.max.toFixed(
+                    1
+                )}\n`;
+            }
+        });
+
+        const content = `# 推移比較分析結果
+
+## 基準データ
+
+- データセットID: ${comparison.base_dataset.dataset_id}
+- ファイル名: ${comparison.base_dataset.filename}
+- 作成日時: ${new Date(comparison.base_dataset.created_at).toLocaleString("ja-JP")}
+- 行数: ${comparison.base_dataset.rows}件
+
+## 比較対象データ
+
+- データセットID: ${comparison.target_dataset.dataset_id}
+- ファイル名: ${comparison.target_dataset.filename}
+- 作成日時: ${new Date(comparison.target_dataset.created_at).toLocaleString("ja-JP")}
+- 行数: ${comparison.target_dataset.rows}件
+
+${statsSummary}
+
+## LLM推移分析
+
+生成日時: ${new Date(analysis.generated_at).toLocaleString("ja-JP")}
+
+${analysis.analysis_text}
+`;
+
+        const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div style={{ padding: 16, fontFamily: "sans-serif", maxWidth: 1200 }}>
             <h1>Prism - 推移比較</h1>
@@ -259,7 +331,39 @@ export default function DatasetComparePage() {
 
                     {/* セクション3: LLM推移分析結果 */}
                     <section style={{ marginBottom: 32 }}>
-                        <h2 style={{ borderBottom: "2px solid #333", paddingBottom: 8 }}>LLM推移分析</h2>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h2 style={{ borderBottom: "2px solid #333", paddingBottom: 8, margin: 0 }}>LLM推移分析</h2>
+                            <div style={{ display: "flex", gap: 8 }}>
+                                <button
+                                    onClick={() => copyToClipboard(analysis.analysis_text)}
+                                    style={{
+                                        padding: "8px 16px",
+                                        backgroundColor: "#2196f3",
+                                        color: "#fff",
+                                        border: "none",
+                                        borderRadius: 4,
+                                        cursor: "pointer",
+                                        fontSize: 14,
+                                    }}
+                                >
+                                    📋 コピー
+                                </button>
+                                <button
+                                    onClick={exportComparisonAsMarkdown}
+                                    style={{
+                                        padding: "8px 16px",
+                                        backgroundColor: "#ff9800",
+                                        color: "#fff",
+                                        border: "none",
+                                        borderRadius: 4,
+                                        cursor: "pointer",
+                                        fontSize: 14,
+                                    }}
+                                >
+                                    📄 Markdownでエクスポート
+                                </button>
+                            </div>
+                        </div>
                         <div
                             style={{
                                 marginTop: 16,

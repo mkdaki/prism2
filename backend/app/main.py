@@ -7,7 +7,7 @@ from functools import lru_cache
 
 from fastapi import Depends, FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, delete
 from sqlalchemy.exc import SQLAlchemyError
 
 from .db import SessionLocal
@@ -336,6 +336,36 @@ def getDatasetDetail(dataset_id: int):
         }
     except SQLAlchemyError as e:
         logger.error(f"GET /datasets/{dataset_id} - DB error: {type(e).__name__}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
+    finally:
+        db.close()
+
+@app.delete("/datasets/{dataset_id}", status_code=204)
+def deleteDataset(dataset_id: int):
+    """目的: 指定されたデータセットを削除する（E-1-1）。CASCADE設定により関連するdataset_rowsも自動削除される。"""
+    logger.info(f"DELETE /datasets/{dataset_id} - Deleting dataset")
+    db = SessionLocal()
+    try:
+        # データセットの存在チェック
+        datasetStatement = select(Dataset.id).where(Dataset.id == dataset_id)
+        datasetRow = db.execute(datasetStatement).first()
+        
+        if datasetRow is None:
+            logger.warning(f"DELETE /datasets/{dataset_id} - Dataset not found")
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        # データセットを削除（CASCADE設定により dataset_rows も自動削除される）
+        deleteStatement = delete(Dataset).where(Dataset.id == dataset_id)
+        db.execute(deleteStatement)
+        db.commit()
+        
+        logger.info(f"DELETE /datasets/{dataset_id} - Successfully deleted")
+        return None  # 204 No Content
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"DELETE /datasets/{dataset_id} - DB error: {type(e).__name__}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
     finally:
         db.close()
