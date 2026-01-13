@@ -1046,12 +1046,73 @@ curl -s "http://localhost:8001/datasets/compare/analysis?base=6&target=7" | pyth
 
 ### E-1. 最小限の使いやすさ改善（実ユーザーテスト前）
 
-* [ ] E-1-1. データセット削除機能
-  * [ ] `DELETE /datasets/{dataset_id}` エンドポイントを実装
-  * [ ] CASCADE設定により `dataset_rows` も自動削除されることを確認
-  * [ ] フロントエンドに削除ボタンを追加（一覧画面または詳細画面）
-  * [ ] 削除確認ダイアログを実装（誤操作防止）
-  * [ ] ユニットテストを追加（正常系、異常系：存在しないIDで404）
+* [x] E-1-1. データセット削除機能
+  * [x] `DELETE /datasets/{dataset_id}` エンドポイントを実装
+  * [x] CASCADE設定により `dataset_rows` も自動削除されることを確認
+  * [x] フロントエンドに削除ボタンを追加（一覧画面または詳細画面）
+  * [x] 削除確認ダイアログを実装（誤操作防止）
+  * [x] ユニットテストを追加（正常系、異常系：存在しないIDで404）
+
+#### E-1-1 実装内容（完了 - 2026/01/13）
+
+**変更ファイル**:
+- `backend/app/main.py` - `DELETE /datasets/{dataset_id}` エンドポイントを追加
+  - 指定されたデータセットを物理削除（PoC段階では論理削除は不要と判断）
+  - CASCADE設定により `dataset_rows` も自動削除
+  - エラーハンドリング（404: Dataset not found）
+- `backend/tests/test_dataset_delete.py` - 新規作成（テスト3件）
+- `backend/tests/conftest.py` - `db` fixtureを追加（テストで直接DBクエリが必要なため）
+- `frontend/src/api/datasets.ts` - `deleteDataset(datasetId)` 関数を追加
+- `frontend/src/pages/DatasetDetailPage.tsx` - 削除ボタンとハンドラーを追加
+  - 赤色の「このデータセットを削除」ボタン（右上配置）
+  - `window.confirm()` による削除確認ダイアログ
+  - 削除成功後、データセット一覧画面へ自動リダイレクト
+- `frontend/src/api/datasets.test.ts` - テスト2件を追加
+
+**テスト結果**:
+- Backend: 47テスト通過（新規3件を含む）、カバレッジ90.09%（目標80%以上達成）✓
+- Frontend: 20テスト通過（新規2件を含む）✓
+
+**新規追加テスト（Backend）**:
+1. `testDeleteDatasetSucceeds` - データセット削除成功（204 No Content）
+2. `testDeleteDatasetReturns404ForNonExistent` - 存在しないIDで404エラー
+3. `testDeleteDatasetCascadesRows` - CASCADE削除の確認（dataset_rowsも削除される）
+
+**新規追加テスト（Frontend）**:
+1. `deleteDataset` の正常系（204 No Content）
+2. `deleteDataset` の異常系（404 Not Found）
+
+**API動作確認**:
+- 存在しないID（999）: 404エラー ✓
+- データセット作成（dataset_id=8）: 成功 ✓
+- データセット削除: 204 No Content ✓
+- 削除後アクセス: 404エラー（削除確認）✓
+
+**ブラウザ動作確認**:
+- 詳細画面に赤い削除ボタンが表示される ✓
+- ボタンクリック時に確認ダイアログが表示される ✓
+- 「OK」押下で削除実行、一覧画面へリダイレクト ✓
+- 削除されたデータセットが一覧から消える ✓
+
+**設計上の決定事項**:
+- **物理削除を採用**（論理削除ではない）
+  - 理由: PoC段階では削除履歴の管理は不要。シンプルさを優先。
+  - 将来的に必要なら、`deleted_at` カラムを追加して論理削除に変更可能。
+- **削除確認ダイアログ**: `window.confirm()` を使用（シンプルで十分）
+  - 将来的にはカスタムモーダルに変更可能。
+- **CASCADE削除**: PostgreSQLの外部キー制約で自動削除
+  - `dataset_rows.dataset_id` に `ON DELETE CASCADE` を設定済み。
+
+**技術的な学び**:
+- pytest の fixture について
+  - `db` fixture がなかったため、`conftest.py` に追加
+  - fixture名と関数の引数名が一致することでpytestが自動注入
+  - 直接DBをクエリする必要があるテストで有用
+- Docker環境でのテスト実行
+  - `prism2-test` 環境でテスト専用DBを使用
+  - `--no-cache` オプションでキャッシュ問題を回避
+
+---
 
 * [ ] E-1-2. 分析結果のコピー/エクスポート機能
   * [ ] 分析結果テキストのコピーボタンを追加（クリップボードAPI利用）

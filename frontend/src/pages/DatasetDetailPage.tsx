@@ -1,9 +1,10 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
     getDatasetDetail,
     getDatasetStats,
     getDatasetAnalysis,
+    deleteDataset,
     type DatasetDetail,
     type DatasetStats,
     type DatasetAnalysis,
@@ -12,6 +13,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 export default function DatasetDetailPage() {
     const { datasetId } = useParams<{ datasetId: string }>();
+    const navigate = useNavigate();
 
     const [detail, setDetail] = useState<DatasetDetail | null>(null);
     const [stats, setStats] = useState<DatasetStats | null>(null);
@@ -19,6 +21,7 @@ export default function DatasetDetailPage() {
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -60,14 +63,52 @@ export default function DatasetDetailPage() {
         fetchData();
     }, [datasetId]);
 
+    const handleDelete = async () => {
+        if (!datasetId || !detail) return;
+
+        const confirmed = window.confirm(
+            `データセット "${detail.filename}" を削除しますか？\n\nこの操作は取り消せません。`
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setDeleting(true);
+            await deleteDataset(parseInt(datasetId, 10));
+            // 削除成功後、一覧画面にリダイレクト
+            navigate("/");
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "削除に失敗しました";
+            alert(`エラー: ${message}`);
+            setDeleting(false);
+        }
+    };
+
     return (
         <div style={{ padding: 16, fontFamily: "sans-serif", maxWidth: 1200 }}>
             <h1>Prism - データセット詳細</h1>
 
-            <div style={{ marginTop: 16, marginBottom: 16 }}>
+            <div style={{ marginTop: 16, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <Link to="/" style={{ color: "#007bff", textDecoration: "none" }}>
                     ← データセット一覧に戻る
                 </Link>
+                {!loading && detail && (
+                    <button
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        style={{
+                            padding: "8px 16px",
+                            backgroundColor: deleting ? "#ccc" : "#dc3545",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: 4,
+                            cursor: deleting ? "not-allowed" : "pointer",
+                            fontWeight: "bold",
+                        }}
+                    >
+                        {deleting ? "削除中..." : "このデータセットを削除"}
+                    </button>
+                )}
             </div>
 
             {loading && <p>読み込み中...</p>}

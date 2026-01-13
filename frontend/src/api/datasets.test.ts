@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { uploadDataset, getDatasets, getDatasetDetail, getDatasetStats, getDatasetAnalysis, compareDatasets, getComparisonAnalysis } from "./datasets";
+import { uploadDataset, getDatasets, getDatasetDetail, getDatasetStats, getDatasetAnalysis, compareDatasets, getComparisonAnalysis, deleteDataset } from "./datasets";
 
 describe("uploadDataset", () => {
     beforeEach(() => {
@@ -497,5 +497,43 @@ describe("getComparisonAnalysis", () => {
         vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
         await expect(getComparisonAnalysis(1, 2, { apiBaseUrl: "http://example.test" })).rejects.toThrow("HTTP 504");
+    });
+});
+
+describe("deleteDataset", () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("データセット削除が成功する（204）", async () => {
+        const fetchMock = vi.fn(async () => {
+            return new Response(null, {
+                status: 204,
+            });
+        });
+        vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+        await deleteDataset(1, { apiBaseUrl: "http://example.test" });
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toBe("http://example.test/datasets/1");
+        expect(init.method).toBe("DELETE");
+    });
+
+    it("存在しないIDで404エラーを投げる", async () => {
+        const fetchMock = vi.fn(async () => {
+            return new Response(JSON.stringify({ detail: "Dataset not found" }), {
+                status: 404,
+                headers: { "Content-Type": "application/json" },
+            });
+        });
+        vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+        await expect(deleteDataset(999, { apiBaseUrl: "http://example.test" })).rejects.toThrow("Dataset not found");
     });
 });
