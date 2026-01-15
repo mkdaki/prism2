@@ -1420,7 +1420,17 @@ curl -s "http://localhost:8001/datasets/compare/analysis?base=6&target=7" | pyth
 
 ---
 
-## 最優先タスク（実装必須）
+## 最優先タスク（実装必須）Phase 1
+**Phase 1完了の条件:**
+- [ ] タスク1, 2, 3のすべてのDone定義を満たす
+- [ ] 全体のテストカバレッジが80%以上を維持
+- [ ] CI（GitHub Actions）がすべて通過
+- [ ] 実データ（dataset_id=4, 9）で第2回比較を実行し、レポートを生成
+  - samples/comparison_4_9_20260115_v2.md として保存
+- [ ] 第2回比較のレポートを第1回と比較し、改善効果を確認
+  - ビジネス価値のある示唆が含まれているか
+  - 継続利用意向が改善されたか
+  - 「使い物にならない」から「実用的」に変化したか
 
 ### 1. [ ] **価格帯の分析機能追加**
 **優先度**: ⭐⭐⭐ 最優先
@@ -1433,6 +1443,66 @@ curl -s "http://localhost:8001/datasets/compare/analysis?base=6&target=7" | pyth
   - LLMプロンプトに価格帯の変化を含める
 - **実装判断**: ✅ 実装する
 - **期待される効果**: 「価格帯が中単価にシフト」「高単価案件が減少」などの実用的な示唆
+
+**Done定義**:
+- [ ] **1. 実装完了の基準**
+  - [ ] UnitPriceから数値を抽出する関数を実装（`extract_price_value()`）
+    - 入力例: "80万円/月", "50-60万円", "¥800,000"
+    - 出力例: 80, 55（中央値）, 80
+    - 欠損値・解析不可値の処理を実装
+  - [ ] 価格帯分類ロジックを実装（`classify_price_range()`）
+    - 高単価: 80万円以上
+    - 中単価: 50-80万円
+    - 低単価: 50万円未満
+    - 不明: 解析不可
+  - [ ] base/targetの価格帯別集計関数を実装（`compare_price_ranges()`）
+    - 各価格帯の件数と構成比を計算
+    - 増減数と増減率を計算
+  - [ ] 統計差分レスポンスに価格帯情報を追加
+    - `/datasets/compare` APIのレスポンスに `price_range_analysis` フィールドを追加
+
+- [ ] **2. テスト完了の基準**
+  - [ ] ユニットテストを追加（カバレッジ80%以上維持）
+    - `test_extract_price_value_success()`: 正常系（各種フォーマット）
+    - `test_extract_price_value_missing()`: 欠損値の処理
+    - `test_extract_price_value_invalid()`: 解析不可値の処理
+    - `test_classify_price_range()`: 価格帯分類
+    - `test_compare_price_ranges()`: base/target比較
+  - [ ] 統合テストでAPIレスポンスを確認
+    - 実データ（dataset_id=4, 9）で `/datasets/compare` を実行
+    - レスポンスに `price_range_analysis` が含まれることを確認
+    - 価格帯の件数・増減率が妥当であることを確認
+
+- [ ] **3. 出力サンプルの確認**
+  - [ ] 以下の形式でレスポンスが返ること
+```json
+{
+  "price_range_analysis": {
+    "base": {
+      "high": 12,    // 80万円以上
+      "mid": 45,     // 50-80万円
+      "low": 96,     // 50万円未満
+      "unknown": 0   // 解析不可
+    },
+    "target": {
+      "high": 8,
+      "mid": 52,
+      "low": 78,
+      "unknown": 0
+    },
+    "changes": {
+      "high": {"diff": -4, "percent": -33.3},
+      "mid": {"diff": 7, "percent": 15.6},
+      "low": {"diff": -18, "percent": -18.8}
+    }
+  }
+}
+```
+
+- [ ] **4. ドキュメント更新**
+  - [ ] `backend/app/analysis.py` に関数の docstring を追加
+  - [ ] Swagger（`/docs`）で新しいレスポンス形式が確認できる
+
 - **実施記録**:
   - 実施日: YYYY/MM/DD
   - 変更内容:
@@ -1454,6 +1524,69 @@ curl -s "http://localhost:8001/datasets/compare/analysis?base=6&target=7" | pyth
   - LLMプロンプトにキーワード変化を含める
 - **実装判断**: ✅ 実装する
 - **期待される効果**: 「AI案件が増加」「PHP案件が減少」などの技術トレンドの把握
+
+**Done定義**:
+- [ ] **1. 実装完了の基準**
+  - [ ] Titleからキーワードを抽出する関数を実装（`extract_keywords_from_title()`）
+    - 技術キーワードリスト（100-200語程度）を定義
+      - 例: ["AI", "機械学習", "Python", "TypeScript", "Next.js", "PHP", "WordPress", ...]
+    - 大文字小文字を区別しないマッチング
+    - 複数のキーワードが1つのTitleに含まれる場合、すべて抽出
+  - [ ] キーワード頻度を集計する関数を実装（`count_keyword_frequency()`）
+    - データセット内の各キーワードの出現回数をカウント
+  - [ ] base/targetのキーワード頻度を比較する関数を実装（`compare_keywords()`）
+    - 増加キーワードTop10を抽出（増加数順）
+    - 減少キーワードTop10を抽出（減少数順）
+    - 新規出現キーワード、消失キーワードを抽出
+  - [ ] 統計差分レスポンスにキーワード情報を追加
+    - `/datasets/compare` APIのレスポンスに `keyword_analysis` フィールドを追加
+
+- [ ] **2. テスト完了の基準**
+  - [ ] ユニットテストを追加（カバレッジ80%以上維持）
+    - `test_extract_keywords_from_title()`: キーワード抽出
+    - `test_extract_keywords_case_insensitive()`: 大文字小文字の処理
+    - `test_count_keyword_frequency()`: 頻度集計
+    - `test_compare_keywords()`: base/target比較
+  - [ ] 統合テストでAPIレスポンスを確認
+    - 実データ（dataset_id=4, 9）で `/datasets/compare` を実行
+    - レスポンスに `keyword_analysis` が含まれることを確認
+    - 増加/減少キーワードが妥当であることを確認
+
+- [ ] **3. 出力サンプルの確認**
+  - [ ] 以下の形式でレスポンスが返ること
+```json
+{
+  "keyword_analysis": {
+    "base_total": 153,
+    "target_total": 138,
+    "increased_keywords": [
+      {"keyword": "AI", "base": 5, "target": 12, "diff": 7},
+      {"keyword": "Next.js", "base": 8, "target": 14, "diff": 6},
+      ...
+    ],
+    "decreased_keywords": [
+      {"keyword": "PHP", "base": 25, "target": 18, "diff": -7},
+      {"keyword": "WordPress", "base": 15, "target": 10, "diff": -5},
+      ...
+    ],
+    "new_keywords": ["ChatGPT", "Stable Diffusion"],
+    "disappeared_keywords": ["Flash"]
+  }
+}
+```
+
+- [ ] **4. キーワードリストの作成**
+  - [ ] 技術キーワードリストを `backend/app/keywords.py` として作成
+    - プログラミング言語: Python, Java, PHP, JavaScript, TypeScript, ...
+    - フレームワーク: React, Vue.js, Next.js, Django, Laravel, ...
+    - クラウド/インフラ: AWS, Azure, GCP, Docker, Kubernetes, ...
+    - データベース: MySQL, PostgreSQL, MongoDB, Redis, ...
+    - その他: AI, 機械学習, ブロックチェーン, IoT, ...
+
+- [ ] **5. ドキュメント更新**
+  - [ ] キーワードリストのメンテナンス方法を `README.md` に記載
+  - [ ] Swagger（`/docs`）で新しいレスポンス形式が確認できる
+
 - **実施記録**:
   - 実施日: YYYY/MM/DD
   - 変更内容:
@@ -1503,6 +1636,62 @@ curl -s "http://localhost:8001/datasets/compare/analysis?base=6&target=7" | pyth
     [分析の前提条件、注意点]
     ```
 - **実装判断**: ✅ 実装する
+
+**Done定義**:
+- [ ] **1. 実装完了の基準**
+  - [ ] `build_comparison_prompt_v2()` 関数を実装
+    - タスク1の価格帯分析結果を入力として受け取る
+    - タスク2のキーワード分析結果を入力として受け取る
+    - 既存の統計差分情報も受け取る（優先度低く配置）
+  - [ ] 新しいプロンプトテンプレートを実装
+    - ビジネス動向サマリー、価格動向、案件内容のトレンド、推奨アクション、前提・限界の各セクションを含む
+    - 統計的指標（No, Page, rowOrder）を**削除または最小化**
+    - ビジネス指標を**最優先で配置**
+  - [ ] `/datasets/compare/analysis` APIを更新
+    - プロンプトv1からv2に切り替え
+    - または、クエリパラメータ `?version=v2` で選択可能にする（推奨）
+
+- [ ] **2. テスト完了の基準**
+  - [ ] ユニットテストを追加（カバレッジ80%以上維持）
+    - `test_build_comparison_prompt_v2_structure()`: プロンプト構造の検証
+    - `test_build_comparison_prompt_v2_price_inclusion()`: 価格帯情報の埋め込み確認
+    - `test_build_comparison_prompt_v2_keyword_inclusion()`: キーワード情報の埋め込み確認
+    - `test_build_comparison_prompt_v2_no_technical_metrics()`: No, Page等が含まれないことを確認
+  - [ ] LLMモック時のテスト
+    - プロンプトv2を使用した際のレスポンス構造を確認
+    - 期待される出力フォーマット（7セクション）が生成されることを確認
+
+- [ ] **3. 実データでの動作確認**
+  - [ ] 実データ（dataset_id=4, 9）で `/datasets/compare/analysis?version=v2` を実行
+  - [ ] 生成されたレポートが以下を満たすこと:
+    - ✅ **ビジネス動向サマリー**: 1-2文で全体像が述べられている
+    - ✅ **価格動向**: 高/中/低単価の変化と示唆が記載されている
+    - ✅ **案件内容のトレンド**: 増加/減少キーワードが記載されている
+    - ✅ **推奨アクション**: 具体的な次のアクション3-5つが提示されている
+    - ✅ **前提・限界**: 分析の前提条件、注意点が記載されている
+    - ❌ **技術的指標（No, Page, rowOrder）が主題として扱われていない**
+
+- [ ] **4. プロンプトの品質確認**
+  - [ ] 生成されたプロンプトをファイル出力し、レビュー
+    - `samples/prompt_v2_example.txt` として保存
+    - プロンプトのトークン数を確認（9000文字以内を維持）
+    - 価格帯情報、キーワード情報が適切に整形されていることを確認
+
+- [ ] **5. v1との比較**
+  - [ ] 同じデータで v1 と v2 を実行し、出力を比較
+    - v1: `samples/comparison_4_9_20260115_v1.md`（既存）
+    - v2: `samples/comparison_4_9_20260115_v2.md`（新規）
+  - [ ] v2がv1と比較して以下を満たすこと:
+    - ✅ ビジネス価値のある示唆が含まれている
+    - ✅ アクションにつながる提案がある
+    - ✅ 技術的指標の記述が削減されている
+    - ✅ 読みやすく、依頼者にとって有用である
+
+- [ ] **6. ドキュメント更新**
+  - [ ] プロンプトv2の設計思想を `docs/prompt_design.md` に記載
+  - [ ] v1とv2の違いを `docs/prompt_design.md` に記載
+  - [ ] Swagger（`/docs`）でバージョンパラメータの使い方を説明
+
 - **実施記録**:
   - 実施日: YYYY/MM/DD
   - 変更内容:
