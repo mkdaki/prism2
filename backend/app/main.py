@@ -13,6 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .db import SessionLocal
 from .analysis import (
     calculate_stats_diff,
+    compare_keywords,
     compare_price_ranges,
     generate_comparison_analysis_text,
     generate_comparison_template_analysis,
@@ -301,7 +302,15 @@ def compareDatasets(base: int, target: int):
         price_column="UnitPrice"
     )
 
-    # 8. レスポンスを返す
+    # 8. キーワード分析を実行（E-2-2改善タスク2）
+    keyword_analysis = compare_keywords(
+        base_rows=base_jsonb_rows,
+        target_rows=target_jsonb_rows,
+        title_column="Title",
+        top_n=10
+    )
+
+    # 9. レスポンスを返す
     logger.info(f"GET /datasets/compare - Success: base={base}, target={target}")
     return {
         "base_dataset": {
@@ -317,7 +326,8 @@ def compareDatasets(base: int, target: int):
             "rows": target_rows
         },
         "comparison": comparison,
-        "price_range_analysis": price_range_analysis
+        "price_range_analysis": price_range_analysis,
+        "keyword_analysis": keyword_analysis
     }
 
 @app.get("/datasets/{dataset_id}")
