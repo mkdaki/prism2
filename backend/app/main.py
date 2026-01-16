@@ -13,6 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .db import SessionLocal
 from .analysis import (
     calculate_stats_diff,
+    compare_price_ranges,
     generate_comparison_analysis_text,
     generate_comparison_template_analysis,
     generate_llm_analysis_text,
@@ -264,21 +265,43 @@ def compareDatasets(base: int, target: int):
             .where(DatasetRow.dataset_id == target)
         )
         target_rows = db.execute(target_rows_statement).scalar_one()
+
+        # 4. 価格帯分析のために行データ（JSONB）を取得（E-2-2改善タスク1）
+        base_jsonb_statement = (
+            select(DatasetRow.data)
+            .where(DatasetRow.dataset_id == base)
+            .order_by(DatasetRow.row_index)
+        )
+        base_jsonb_rows = db.execute(base_jsonb_statement).scalars().all()
         
+        target_jsonb_statement = (
+            select(DatasetRow.data)
+            .where(DatasetRow.dataset_id == target)
+            .order_by(DatasetRow.row_index)
+        )
+        target_jsonb_rows = db.execute(target_jsonb_statement).scalars().all()
+
     except SQLAlchemyError as e:
         logger.error(f"GET /datasets/compare - DB error: {type(e).__name__}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}")
     finally:
         db.close()
-    
-    # 4. getDatasetStats() を2回呼び出して統計を取得
+
+    # 5. getDatasetStats() を2回呼び出して統計を取得
     base_stats = getDatasetStats(base)
     target_stats = getDatasetStats(target)
-    
-    # 5. 差分を計算
+
+    # 6. 統計差分を計算
     comparison = calculate_stats_diff(base_stats, target_stats)
-    
-    # 6. レスポンスを返す
+
+    # 7. 価格帯分析を実行（E-2-2改善タスク1）
+    price_range_analysis = compare_price_ranges(
+        base_rows=base_jsonb_rows,
+        target_rows=target_jsonb_rows,
+        price_column="UnitPrice"
+    )
+
+    # 8. レスポンスを返す
     logger.info(f"GET /datasets/compare - Success: base={base}, target={target}")
     return {
         "base_dataset": {
@@ -293,7 +316,8 @@ def compareDatasets(base: int, target: int):
             "created_at": target_dataset_row.created_at,
             "rows": target_rows
         },
-        "comparison": comparison
+        "comparison": comparison,
+        "price_range_analysis": price_range_analysis
     }
 
 @app.get("/datasets/{dataset_id}")
