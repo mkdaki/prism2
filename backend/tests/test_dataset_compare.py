@@ -263,3 +263,85 @@ def testGetDatasetCompareIncludesPriceRangeAnalysis(client):
     # unknown: 1 → 1 （±0件、0%）
     assert changes["unknown"]["diff"] == 0
     assert changes["unknown"]["percent"] == pytest.approx(0.0)
+
+
+def testGetDatasetCompareIncludesKeywordAnalysis(client):
+    """
+    目的: /datasets/compare APIがキーワード分析結果を含むことを確認（E-2-2-1-2）
+    """
+    # 1. Base用CSVを作成（Titleカラム含む）
+    base_csv = (
+        "Title,UnitPrice\n"
+        "Pythonエンジニア募集,80万円/月\n"
+        "Python/Django開発,85万円\n"
+        "PHP案件,60万円\n"
+        "PHP/Laravel案件,55万円\n"
+    )
+    base_files = {"file": ("base.csv", io.BytesIO(base_csv.encode("utf-8")), "text/csv")}
+    base_response = client.post("/datasets/upload", files=base_files)
+    assert base_response.status_code == 200
+    base_id = base_response.json()["dataset_id"]
+    
+    # 2. Target用CSVを作成（Titleカラム含む、キーワードに変化あり）
+    target_csv = (
+        "Title,UnitPrice\n"
+        "Pythonエンジニア募集,90万円/月\n"
+        "Python/Django開発,85万円\n"
+        "Python/AI案件,95万円\n"  # AI追加
+        "TypeScript/Next.js案件,75万円\n"  # TypeScript, Next.js追加
+        "React開発,70万円\n"  # React追加
+    )
+    target_files = {"file": ("target.csv", io.BytesIO(target_csv.encode("utf-8")), "text/csv")}
+    target_response = client.post("/datasets/upload", files=target_files)
+    assert target_response.status_code == 200
+    target_id = target_response.json()["dataset_id"]
+    
+    # 3. /datasets/compare APIを呼び出し
+    compare_response = client.get(f"/datasets/compare?base={base_id}&target={target_id}")
+    assert compare_response.status_code == 200
+    
+    result = compare_response.json()
+    
+    # 4. keyword_analysis フィールドが含まれることを確認
+    assert "keyword_analysis" in result
+    ka = result["keyword_analysis"]
+    
+    # 5. 必須フィールドの存在確認
+    assert "base_total" in ka
+    assert "target_total" in ka
+    assert "increased_keywords" in ka
+    assert "decreased_keywords" in ka
+    assert "new_keywords" in ka
+    assert "disappeared_keywords" in ka
+    
+    # 6. 件数の確認
+    assert ka["base_total"] == 4
+    assert ka["target_total"] == 5
+    
+    # 7. 増加キーワードの確認（Pythonが増加: 2→3）
+    increased = ka["increased_keywords"]
+    python_increase = next((k for k in increased if k["keyword"] == "Python"), None)
+    assert python_increase is not None
+    assert python_increase["base"] == 2
+    assert python_increase["target"] == 3
+    assert python_increase["diff"] == 1
+    
+    # 8. 減少キーワードの確認（PHPが減少: 2→0）
+    decreased = ka["decreased_keywords"]
+    php_decrease = next((k for k in decreased if k["keyword"] == "PHP"), None)
+    assert php_decrease is not None
+    assert php_decrease["base"] == 2
+    assert php_decrease["target"] == 0
+    assert php_decrease["diff"] == -2
+    
+    # 9. 新規キーワードの確認
+    new_keywords = ka["new_keywords"]
+    assert "AI" in new_keywords
+    assert "TypeScript" in new_keywords
+    assert "Next.js" in new_keywords
+    assert "React" in new_keywords
+    
+    # 10. 消失キーワードの確認
+    disappeared = ka["disappeared_keywords"]
+    assert "PHP" in disappeared
+    assert "Laravel" in disappeared

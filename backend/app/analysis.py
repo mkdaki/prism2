@@ -701,6 +701,128 @@ def classify_price_range(price: float | None) -> str:
         return "low"
 
 
+def extract_keywords_from_titles(
+    rows: list[dict],
+    title_column: str = "Title"
+) -> dict[str, int]:
+    """
+    目的: Titleカラムからキーワードを抽出し、出現頻度を集計する（E-2-2-1-2）
+    
+    Args:
+        rows: 行データのリスト（各行はJSONB辞書）
+        title_column: Titleカラムの名前（デフォルト: "Title"）
+    
+    Returns:
+        キーワードと出現頻度の辞書
+        例: {"Python": 15, "AI": 8, "Next.js": 5, ...}
+    
+    Notes:
+        - 大文字小文字を区別しない（"python" も "Python" も同じ）
+        - 部分一致でマッチング（"Pythonエンジニア募集" から "Python" を抽出）
+        - 1つのTitleに同じキーワードが複数回出現しても1回としてカウント
+    """
+    from .keywords import TECH_KEYWORDS
+    
+    # キーワードの出現頻度を記録
+    keyword_freq: dict[str, int] = {}
+    
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        
+        title = row.get(title_column)
+        if not title or not isinstance(title, str):
+            continue
+        
+        # 小文字化して比較（大文字小文字を区別しない）
+        title_lower = title.lower()
+        
+        # このTitleで既に見つかったキーワードを記録（重複カウント防止）
+        found_in_this_title = set()
+        
+        for keyword in TECH_KEYWORDS:
+            keyword_lower = keyword.lower()
+            
+            # 部分一致でマッチング
+            if keyword_lower in title_lower:
+                # まだこのTitleで見つかっていない場合のみカウント
+                if keyword not in found_in_this_title:
+                    keyword_freq[keyword] = keyword_freq.get(keyword, 0) + 1
+                    found_in_this_title.add(keyword)
+    
+    return keyword_freq
+
+
+def compare_keywords(
+    base_rows: list[dict],
+    target_rows: list[dict],
+    title_column: str = "Title",
+    top_n: int = 10
+) -> dict:
+    """
+    目的: base/targetのキーワード頻度を比較し、増減を返す（E-2-2-1-2）
+    
+    Args:
+        base_rows: 基準データの行データリスト
+        target_rows: 比較対象データの行データリスト
+        title_column: Titleカラムの名前（デフォルト: "Title"）
+        top_n: 増加/減少キーワードのTop数（デフォルト: 10）
+    
+    Returns:
+        {
+            "base_total": 153,
+            "target_total": 138,
+            "increased_keywords": [{"keyword": "AI", "base": 5, "target": 15, "diff": 10}, ...],
+            "decreased_keywords": [{"keyword": "PHP", "base": 30, "target": 22, "diff": -8}, ...],
+            "new_keywords": ["ChatGPT", "LLM"],
+            "disappeared_keywords": ["Flash"]
+        }
+    """
+    # 各データセットのキーワード頻度を取得
+    base_freq = extract_keywords_from_titles(base_rows, title_column)
+    target_freq = extract_keywords_from_titles(target_rows, title_column)
+    
+    # すべてのキーワードを取得（base と target の和集合）
+    all_keywords = set(base_freq.keys()) | set(target_freq.keys())
+    
+    # 増加/減少を計算
+    changes = []
+    for keyword in all_keywords:
+        base_count = base_freq.get(keyword, 0)
+        target_count = target_freq.get(keyword, 0)
+        diff = target_count - base_count
+        
+        changes.append({
+            "keyword": keyword,
+            "base": base_count,
+            "target": target_count,
+            "diff": diff
+        })
+    
+    # 増加キーワード（diff > 0）を抽出してTop N
+    increased = [c for c in changes if c["diff"] > 0]
+    increased_sorted = sorted(increased, key=lambda x: x["diff"], reverse=True)[:top_n]
+    
+    # 減少キーワード（diff < 0）を抽出してTop N
+    decreased = [c for c in changes if c["diff"] < 0]
+    decreased_sorted = sorted(decreased, key=lambda x: x["diff"])[:top_n]
+    
+    # 新規出現キーワード（baseになくtargetにある）
+    new_keywords = [k for k in target_freq.keys() if k not in base_freq]
+    
+    # 消失キーワード（baseにあってtargetにない）
+    disappeared_keywords = [k for k in base_freq.keys() if k not in target_freq]
+    
+    return {
+        "base_total": len(base_rows),
+        "target_total": len(target_rows),
+        "increased_keywords": increased_sorted,
+        "decreased_keywords": decreased_sorted,
+        "new_keywords": sorted(new_keywords),
+        "disappeared_keywords": sorted(disappeared_keywords)
+    }
+
+
 def compare_price_ranges(
     base_rows: list[dict],
     target_rows: list[dict],
