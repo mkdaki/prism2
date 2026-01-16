@@ -583,3 +583,199 @@ def calculate_stats_diff(base_stats: dict, target_stats: dict) -> dict:
         "columns_change": columns_change
     }
 
+
+def extract_price_value(price_str: str | None) -> float | None:
+    """
+    目的: UnitPrice文字列から数値を抽出する（E-2-2改善タスク1）
+    
+    Args:
+        price_str: 価格文字列（例: "80万円/月", "50-60万円", "¥800,000", None, "応相談"）
+    
+    Returns:
+        抽出した価格（万円単位）。解析不可の場合は None。
+        範囲指定の場合は中央値を返す（例: "50-60万円" → 55.0）
+    
+    Examples:
+        "80万円/月" → 80.0
+        "50-60万円" → 55.0
+        "¥800,000" → 80.0
+        None → None
+        "" → None
+        "応相談" → None
+    """
+    import re
+    
+    # 1. None/空文字チェック
+    if price_str is None or price_str == "":
+        return None
+    
+    price_str = str(price_str).strip()
+    if not price_str:
+        return None
+    
+    # 2. "万円"パターンのマッチング（例: "80万円/月", "50-60万円"）
+    # パターン: 数値-数値万円 または 数値万円
+    pattern_man_yen = r'(\d+(?:\.\d+)?)\s*[-~〜]\s*(\d+(?:\.\d+)?)\s*万円|(\d+(?:\.\d+)?)\s*万円'
+    match = re.search(pattern_man_yen, price_str)
+    
+    if match:
+        if match.group(1) and match.group(2):
+            # 範囲指定（例: "50-60万円"）→ 中央値
+            start = float(match.group(1))
+            end = float(match.group(2))
+            return round((start + end) / 2, 1)
+        elif match.group(3):
+            # 単一値（例: "80万円"）
+            return float(match.group(3))
+    
+    # 3. カンマ区切り数値のパターン（例: "¥800,000", "800,000円"）
+    # カンマを削除して数値を抽出
+    pattern_comma = r'[\¥$]?\s*(\d{1,3}(?:,\d{3})+)(?:円)?'
+    match_comma = re.search(pattern_comma, price_str)
+    
+    if match_comma:
+        # カンマを削除して数値化
+        num_str = match_comma.group(1).replace(',', '')
+        try:
+            value = float(num_str)
+            # 1万円以上の場合は万円単位に変換
+            if value >= 10000:
+                return round(value / 10000, 1)
+            else:
+                # 1万円未満の場合はそのまま（万円単位として扱う）
+                return round(value, 1)
+        except ValueError:
+            pass
+    
+    # 4. 純粋な数値パターン（例: "80", "800000"）
+    pattern_number = r'(\d+(?:\.\d+)?)'
+    match_number = re.search(pattern_number, price_str)
+    
+    if match_number:
+        try:
+            value = float(match_number.group(1))
+            # 1000以上の場合は万円単位に変換（例: 800000 → 80）
+            if value >= 1000:
+                return round(value / 10000, 1)
+            else:
+                # 1000未満の場合はそのまま万円単位として扱う
+                return round(value, 1)
+        except ValueError:
+            pass
+    
+    # 5. すべてのパターンにマッチしない場合は None
+    return None
+
+
+def classify_price_range(price: float | None) -> str:
+    """
+    目的: 価格を価格帯に分類する（E-2-2改善タスク1）
+    
+    Args:
+        price: 価格（万円単位）。None の場合は "unknown"。
+    
+    Returns:
+        価格帯の分類:
+        - "high": 80万円以上
+        - "mid": 50万円以上80万円未満
+        - "low": 50万円未満
+        - "unknown": None または 0以下
+    
+    Examples:
+        100.0 → "high"
+        80.0 → "high"
+        60.0 → "mid"
+        50.0 → "mid"
+        30.0 → "low"
+        None → "unknown"
+        0.0 → "unknown"
+    """
+    if price is None or price <= 0:
+        return "unknown"
+    
+    if price >= 80.0:
+        return "high"
+    elif price >= 50.0:
+        return "mid"
+    else:
+        return "low"
+
+
+def compare_price_ranges(
+    base_rows: list[dict],
+    target_rows: list[dict],
+    price_column: str = "UnitPrice"
+) -> dict:
+    """
+    目的: base/targetの価格帯別集計と比較を行う（E-2-2改善タスク1）
+    
+    Args:
+        base_rows: 基準データの行データリスト（各行はJSONB辞書）
+        target_rows: 比較対象データの行データリスト（各行はJSONB辞書）
+        price_column: 価格カラムの名前（デフォルト: "UnitPrice"）
+    
+    Returns:
+        価格帯別の集計結果と増減:
+        {
+            "base": {"high": 12, "mid": 45, "low": 96, "unknown": 0},
+            "target": {"high": 8, "mid": 52, "low": 78, "unknown": 0},
+            "changes": {
+                "high": {"diff": -4, "percent": -33.3},
+                "mid": {"diff": 7, "percent": 15.6},
+                "low": {"diff": -18, "percent": -18.8},
+                "unknown": {"diff": 0, "percent": 0.0}
+            }
+        }
+    """
+    # 価格帯別の集計を初期化
+    base_counts = {"high": 0, "mid": 0, "low": 0, "unknown": 0}
+    target_counts = {"high": 0, "mid": 0, "low": 0, "unknown": 0}
+    
+    # base データの集計
+    for row in base_rows:
+        if not isinstance(row, dict):
+            continue
+        
+        price_str = row.get(price_column)
+        price_value = extract_price_value(price_str)
+        price_range = classify_price_range(price_value)
+        
+        if price_range in base_counts:
+            base_counts[price_range] += 1
+    
+    # target データの集計
+    for row in target_rows:
+        if not isinstance(row, dict):
+            continue
+        
+        price_str = row.get(price_column)
+        price_value = extract_price_value(price_str)
+        price_range = classify_price_range(price_value)
+        
+        if price_range in target_counts:
+            target_counts[price_range] += 1
+    
+    # 増減の計算
+    changes = {}
+    for range_name in ["high", "mid", "low", "unknown"]:
+        base_count = base_counts[range_name]
+        target_count = target_counts[range_name]
+        diff = target_count - base_count
+        
+        # 増減率の計算（base が 0 の場合は 0.0）
+        if base_count > 0:
+            percent = round((diff / base_count) * 100.0, 1)
+        else:
+            percent = 0.0
+        
+        changes[range_name] = {
+            "diff": diff,
+            "percent": percent
+        }
+    
+    return {
+        "base": base_counts,
+        "target": target_counts,
+        "changes": changes
+    }
+

@@ -185,3 +185,81 @@ def testGetDatasetCompareWithDifferentColumns(client):
     assert price_col is not None
     assert price_col["base"] is not None
     assert price_col["target"] is not None
+
+
+def testGetDatasetCompareIncludesPriceRangeAnalysis(client):
+    """目的: GET /datasets/compare が price_range_analysis を含むことを確認する（E-2-2改善タスク1）"""
+    # 1つ目のCSV（UnitPrice カラムを含む）
+    csv1 = (
+        "Title,UnitPrice\n"
+        "案件A,80万円/月\n"       # high
+        "案件B,100万円\n"         # high
+        "案件C,60万円\n"          # mid
+        "案件D,70万円\n"          # mid
+        "案件E,30万円\n"          # low
+        "案件F,40万円\n"          # low
+        "案件G,応相談\n"          # unknown
+    )
+    files1 = {"file": ("data1.csv", io.BytesIO(csv1.encode("utf-8")), "text/csv")}
+    upload1 = client.post("/datasets/upload", files=files1)
+    assert upload1.status_code == 200
+    base_id = upload1.json()["dataset_id"]
+    
+    # 2つ目のCSV（価格帯が変化）
+    csv2 = (
+        "Title,UnitPrice\n"
+        "案件H,90万円\n"          # high
+        "案件I,65万円\n"          # mid
+        "案件J,55万円\n"          # mid
+        "案件K,75万円\n"          # mid
+        "案件L,52万円\n"          # mid
+        "案件M,35万円\n"          # low
+        "案件N,要相談\n"          # unknown
+    )
+    files2 = {"file": ("data2.csv", io.BytesIO(csv2.encode("utf-8")), "text/csv")}
+    upload2 = client.post("/datasets/upload", files=files2)
+    assert upload2.status_code == 200
+    target_id = upload2.json()["dataset_id"]
+    
+    # 比較API呼び出し
+    response = client.get(f"/datasets/compare?base={base_id}&target={target_id}")
+    assert response.status_code == 200
+    body = response.json()
+    
+    # price_range_analysis フィールドの存在確認
+    assert "price_range_analysis" in body
+    pra = body["price_range_analysis"]
+    
+    # base の価格帯集計確認
+    assert "base" in pra
+    assert pra["base"]["high"] == 2     # 80万円, 100万円
+    assert pra["base"]["mid"] == 2      # 60万円, 70万円
+    assert pra["base"]["low"] == 2      # 30万円, 40万円
+    assert pra["base"]["unknown"] == 1  # 応相談
+    
+    # target の価格帯集計確認
+    assert "target" in pra
+    assert pra["target"]["high"] == 1   # 90万円
+    assert pra["target"]["mid"] == 4    # 65万円, 55万円, 75万円, 52万円
+    assert pra["target"]["low"] == 1    # 35万円
+    assert pra["target"]["unknown"] == 1  # 要相談
+    
+    # 増減の確認
+    assert "changes" in pra
+    changes = pra["changes"]
+    
+    # high: 2 → 1 （-1件、-50%）
+    assert changes["high"]["diff"] == -1
+    assert changes["high"]["percent"] == pytest.approx(-50.0)
+    
+    # mid: 2 → 4 （+2件、+100%）
+    assert changes["mid"]["diff"] == 2
+    assert changes["mid"]["percent"] == pytest.approx(100.0)
+    
+    # low: 2 → 1 （-1件、-50%）
+    assert changes["low"]["diff"] == -1
+    assert changes["low"]["percent"] == pytest.approx(-50.0)
+    
+    # unknown: 1 → 1 （±0件、0%）
+    assert changes["unknown"]["diff"] == 0
+    assert changes["unknown"]["percent"] == pytest.approx(0.0)
