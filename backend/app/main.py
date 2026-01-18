@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .db import SessionLocal
 from .analysis import (
+    build_comparison_prompt_v2,
     calculate_stats_diff,
     compare_keywords,
     compare_price_ranges,
@@ -119,9 +120,21 @@ def listDatasets():
         db.close()
 
 @app.get("/datasets/compare/analysis")
-def compareDatasetAnalysis(base: int, target: int, llm: LLMClient = Depends(getLlmClient)):
-    """目的: 2つのデータセットの差分を分析し、LLMによる推移分析テキストを返す（E-0-3）"""
-    logger.info(f"GET /datasets/compare/analysis?base={base}&target={target} - Generating comparison analysis")
+def compareDatasetAnalysis(
+    base: int, 
+    target: int, 
+    version: str = "v1",
+    llm: LLMClient = Depends(getLlmClient)
+):
+    """目的: 2つのデータセットの差分を分析し、LLMによる推移分析テキストを返す（E-0-3, E-2-2-1-3）
+    
+    Args:
+        base: 基準データセットID
+        target: 比較対象データセットID
+        version: プロンプトバージョン ("v1" or "v2")
+        llm: LLMクライアント
+    """
+    logger.info(f"GET /datasets/compare/analysis?base={base}&target={target}&version={version} - Generating comparison analysis")
     
     # 1. 比較結果を取得（E-0-2のエンドポイントを再利用）
     comparison_data = compareDatasets(base, target)
@@ -150,8 +163,8 @@ def compareDatasetAnalysis(base: int, target: int, llm: LLMClient = Depends(getL
     # 3. LLMによる推移分析
     generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     try:
-        logger.info(f"GET /datasets/compare/analysis - Calling LLM")
-        text = generate_comparison_analysis_text(comparison_data, llm)
+        logger.info(f"GET /datasets/compare/analysis - Calling LLM (version={version})")
+        text = generate_comparison_analysis_text(comparison_data, llm, version=version)
         logger.info(f"GET /datasets/compare/analysis - LLM call succeeded (text_length={len(text)})")
     except LLMError as e:
         logger.error(

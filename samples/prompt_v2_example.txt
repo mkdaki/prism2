@@ -1,0 +1,100 @@
+root@2d3f5f04195a:/app# python -c "
+from app.main import compareDatasets
+from app.analysis import build_comparison_prompt_v2
+
+comparison_data = compareDatasets(4, 9)
+prompt = build_comparison_prompt_v2(comparison_data)
+
+print('=== プロンプト文字数 ===')
+print(len(prompt))
+print()
+print('=== プロンプト全文 ===')
+print(prompt)
+"
+2026-01-18 08:46:20 [INFO] prism.backend: GET /datasets/compare?base=4&target=9 - Comparing datasets
+2026-01-18 08:46:20 [INFO] prism.backend: GET /datasets/4/stats - Computing statistics
+2026-01-18 08:46:20 [INFO] prism.backend: GET /datasets/4/stats - Returning stats (rows=153, columns=15)
+2026-01-18 08:46:20 [INFO] prism.backend: GET /datasets/9/stats - Computing statistics
+2026-01-18 08:46:20 [INFO] prism.backend: GET /datasets/9/stats - Returning stats (rows=138, columns=15)
+2026-01-18 08:46:21 [INFO] prism.backend: GET /datasets/compare - Success: base=4, target=9
+=== プロンプト文字数 ===
+1538
+
+=== プロンプト全文 ===
+あなたはフリーランスエンジニア市場のビジネスアナリストです。
+以下の2つのデータセットの比較結果を分析し、**ビジネス的に価値のある示唆**を提供 してください。
+
+【基準データ】
+ファイル名: results_20251210084429.csv
+作成日時: 2026-01-10 00:45:28.662054+00:00
+案件数: 153件
+
+【比較対象データ】
+ファイル名: results_20260115015514.csv
+作成日時: 2026-01-15 02:03:50.293190+00:00
+案件数: 138件
+案件数の変化: -15件 (-9.8%)
+
+【価格帯別の案件数】
+- 高単価案件（80万円以上）: 42件 → 15件 (-27件, -64.3%)
+- 中単価案件（50-80万円）: 34件 → 24件 (-10件, -29.4%)
+- 低単価案件（50万円未満）: 71件 → 82件 (+11件, +15.5%)
+- 価格不明案件: 6件 → 17件 (+11件, +183.3%)
+
+【案件内容のキーワード変化】
+
+増加キーワード（Top5）:
+  - Java: 7件 → 11件 (+4件)
+  - VBA: 1件 → 4件 (+3件)
+  - C++: 0件 → 2件 (+2件)
+  - AWS: 0件 → 2件 (+2件)
+  - TypeScript: 0件 → 2件 (+2件)
+
+減少キーワード（Top5）:
+  - C: 28件 → 24件 (-4件)
+  - .NET: 4件 → 0件 (-4件)
+  - Android: 6件 → 2件 (-4件)
+  - API: 6件 → 3件 (-3件)
+  - EC: 8件 → 5件 (-3件)
+
+新規出現キーワード: AWS, BtoB, C++, Docker, Gemini, Git, GitHub, Ruby, Slack, TypeScript
+
+消失キーワード: .NET, Azure, DX, Delphi, Dify, Excel, Firebase, GCP, Google Cloud, Kotlin
+
+分析の指針:
+- **ビジネス視点**: 価格帯の変化、技術トレンドの変化から市場動向を読み取る
+- **アクション指向**: フリーランスエンジニアが「次に何をすべきか」を提案する
+- **根拠の明確化**: データに基づく分析と推測を区別する
+- **技術トレンド**: 増加/減少キーワードから技術の需要変化を分析する
+
+出力フォーマット（必ずこの順で、各セクションを含める）:
+
+## ビジネス動向サマリー
+[1-2文で全体像を述べる。価格帯とキーワードの変化から見える市場のトレンド]
+
+## 価格動向
+[高/中/低単価案件の変化を分析。ビジネス的な示唆を述べる]
+- 高単価案件の増減とその意味
+- 中単価案件の増減とその意味
+- 低単価案件の増減とその意味
+- 価格動向から読み取れる市場の変化
+
+## 案件内容のトレンド
+[キーワードの増減から技術トレンドを分析]
+- 増加している技術・分野とその背景
+- 減少している技術・分野とその背景
+- 新規出現したキーワードの意味
+- 技術トレンドの今後の予測
+
+## 推奨アクション
+[フリーランスエンジニアが取るべき具体的なアクション3-5つ]
+- スキル強化の優先順位
+- 注目すべき技術領域
+- 避けるべきリスク
+
+## 前提・限界
+[この分析の前提条件、注意点、限界を明記]
+- データの期間や件数に関する注意点
+- 推測と事実の区別
+- より詳細な分析に必要な情報
+
