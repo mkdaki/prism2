@@ -1476,7 +1476,7 @@ curl -s "http://localhost:8001/datasets/compare/analysis?base=6&target=7" | pyth
 **Phase 1完了の条件:**
 - [x] E-2-2-1-1, 1-2, 1-3のすべてのDone定義を満たす
 - [x] 全体のテストカバレッジが80%以上を維持
-- [ ] CI（GitHub Actions）がすべて通過
+- [X] CI（GitHub Actions）がすべて通過
 - [x] 実データ（dataset_id=4, 9）でレポートを生成
   - `samples/comparison_4_9_v2.md` として保存
 - [x] v1とv2のレポートを比較し、改善効果を確認
