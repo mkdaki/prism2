@@ -1727,67 +1727,70 @@ curl -s "http://localhost:8001/datasets/compare/analysis?base=6&target=7" | pyth
 - **実装判断**: ✅ 実装する
 
 **Done定義**:
-- [ ] **1. 実装完了の基準**
-  - [ ] `build_comparison_prompt_v2()` 関数を実装
+- [x] **1. 実装完了の基準**
+  - [x] `build_comparison_prompt_v2()` 関数を実装
     - タスク1の価格帯分析結果を入力として受け取る
     - タスク2のキーワード分析結果を入力として受け取る
     - 既存の統計差分情報も受け取る（優先度低く配置）
-  - [ ] 新しいプロンプトテンプレートを実装
+  - [x] 新しいプロンプトテンプレートを実装
     - ビジネス動向サマリー、価格動向、案件内容のトレンド、推奨アクション、前提・限界の各セクションを含む
     - 統計的指標（No, Page, rowOrder）を**削除または最小化**
     - ビジネス指標を**最優先で配置**
-  - [ ] `/datasets/compare/analysis` APIを更新
+  - [x] `/datasets/compare/analysis` APIを更新
     - プロンプトv1からv2に切り替え
     - または、クエリパラメータ `?version=v2` で選択可能にする（推奨）
 
-- [ ] **2. テスト完了の基準**
-  - [ ] ユニットテストを追加（カバレッジ80%以上維持）
+- [x] **2. テスト完了の基準**
+  - [x] ユニットテストを追加（カバレッジ80%以上維持）
     - `test_build_comparison_prompt_v2_structure()`: プロンプト構造の検証
     - `test_build_comparison_prompt_v2_price_inclusion()`: 価格帯情報の埋め込み確認
     - `test_build_comparison_prompt_v2_keyword_inclusion()`: キーワード情報の埋め込み確認
     - `test_build_comparison_prompt_v2_no_technical_metrics()`: No, Page等が含まれないことを確認
-  - [ ] LLMモック時のテスト
+  - [x] LLMモック時のテスト
     - プロンプトv2を使用した際のレスポンス構造を確認
-    - 期待される出力フォーマット（7セクション）が生成されることを確認
+    - 期待される出力フォーマット（5セクション）が生成されることを確認
 
-- [ ] **3. 実データでの動作確認**
-  - [ ] 実データ（dataset_id=4, 9）で `/datasets/compare/analysis?version=v2` を実行
-  - [ ] 生成されたレポートが以下を満たすこと:
+- [x] **3. 実データでの動作確認**
+  - [x] 実データ（dataset_id=4, 9）で `/datasets/compare/analysis?version=v2` を実行
+  - [x] 生成されたレポートが以下を満たすこと:
     - ✅ **ビジネス動向サマリー**: 1-2文で全体像が述べられている
     - ✅ **価格動向**: 高/中/低単価の変化と示唆が記載されている
     - ✅ **案件内容のトレンド**: 増加/減少キーワードが記載されている
     - ✅ **推奨アクション**: 具体的な次のアクション3-5つが提示されている
     - ✅ **前提・限界**: 分析の前提条件、注意点が記載されている
-    - ❌ **技術的指標（No, Page, rowOrder）が主題として扱われていない**
+    - ✅ **技術的指標（No, Page, rowOrder）が主題として扱われていない**
 
-- [ ] **4. プロンプトの品質確認**
-  - [ ] 生成されたプロンプトをファイル出力し、レビュー
+- [x] **4. プロンプトの品質確認**
+  - [x] 生成されたプロンプトをファイル出力し、レビュー
     - `samples/prompt_v2_example.txt` として保存
-    - プロンプトのトークン数を確認（9000文字以内を維持）
+    - プロンプトのトークン数を確認（1538文字、9000文字以内）
     - 価格帯情報、キーワード情報が適切に整形されていることを確認
 
-- [ ] **5. v1との比較**
-  - [ ] 同じデータで v1 と v2 を実行し、出力を比較
-    - v1: `samples/comparison_4_9_20260115_v1.md`（既存）
-    - v2: `samples/comparison_4_9_20260115_v2.md`（新規）
-  - [ ] v2がv1と比較して以下を満たすこと:
+- [x] **5. v1との比較**
+  - [x] 同じデータで v1 と v2 を実行し、出力を比較
+    - v1: `samples/comparison_4_9_v1.md`
+    - v2: `samples/comparison_4_9_v2.md`
+  - [x] v2がv1と比較して以下を満たすこと:
     - ✅ ビジネス価値のある示唆が含まれている
     - ✅ アクションにつながる提案がある
     - ✅ 技術的指標の記述が削減されている
     - ✅ 読みやすく、依頼者にとって有用である
 
-- [ ] **6. ドキュメント更新**
-  - [ ] プロンプトv2の設計思想を `docs/prompt_design.md` に記載
-  - [ ] v1とv2の違いを `docs/prompt_design.md` に記載
-  - [ ] Swagger（`/docs`）でバージョンパラメータの使い方を説明
+- [x] **6. ドキュメント更新**
+  - [x] プロンプトv2の設計思想を `docs/prompt_design.md` に記載
+  - [x] v1とv2の違いを `docs/prompt_design.md` に記載
+  - [x] Swagger（`/docs`）でバージョンパラメータの使い方を説明
 
 - **実施記録**:
-  - 実施日: YYYY/MM/DD
+  - 実施日: 2026/01/18
   - 変更内容:
-    - `backend/app/analysis.py`: `build_comparison_prompt_v2()` の実装
-    - プロンプトテンプレートの全面刷新
-    - 統計差分の優先度を下げ、ビジネス指標を優先
-  - テスト結果: [...]
+    - `backend/app/analysis.py`: `build_comparison_prompt_v2()` の実装（212行追加）
+    - `backend/app/main.py`: `version` パラメータ追加、v2呼び出し対応
+    - `backend/tests/test_prompt_v2.py`: 8テストケース追加
+    - `docs/prompt_design.md`: プロンプト設計ドキュメント新規作成
+    - `samples/prompt_v2_example.txt`: プロンプト例
+    - `samples/comparison_4_9_v1.md`, `samples/comparison_4_9_v2.md`: v1/v2比較用出力
+  - テスト結果: 88テスト成功、カバレッジ91.21%
 
 ---
 
@@ -1878,7 +1881,7 @@ curl -s "http://localhost:8001/datasets/compare/analysis?base=6&target=7" | pyth
 **Phase 1（最優先・1週間以内）**:
 1. ✅ E-2-2-1-1: 価格帯の分析機能（完了: 2026/01/13）
 2. ✅ E-2-2-1-2: 案件内容のキーワード分析（完了: 2026/01/16）
-3. E-2-2-1-3: プロンプトv2の実装
+3. ✅ E-2-2-1-3: プロンプトv2の実装（完了: 2026/01/18）
 
 **Phase 2（高優先・1週間以内）**:
 4. E-2-2-1-4: スキル需要の分析

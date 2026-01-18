@@ -366,6 +366,203 @@ def build_comparison_prompt_v1(comparison_data: dict) -> str:
     return instructions
 
 
+def build_comparison_prompt_v2(comparison_data: dict) -> str:
+    """
+    目的: ビジネス文脈重視の比較分析プロンプトを生成（E-2-2-1-3）
+    
+    Args:
+        comparison_data: compareDatasets() の返り値
+            - base_dataset: {dataset_id, filename, created_at, rows}
+            - target_dataset: {dataset_id, filename, created_at, rows}
+            - comparison: {rows_change, columns_change}
+            - price_range_analysis: {base, target, changes}
+            - keyword_analysis: {increased_keywords, decreased_keywords, new_keywords, disappeared_keywords}
+    
+    Returns:
+        LLMに送信するプロンプト文字列（ビジネス指標優先）
+    
+    Notes:
+        - 技術的指標（No, Page, rowOrder）を最小化
+        - ビジネス指標（価格帯、キーワード）を最優先
+        - アクション指向の分析を促す
+    """
+    base = comparison_data.get("base_dataset") or {}
+    target = comparison_data.get("target_dataset") or {}
+    comparison = comparison_data.get("comparison") or {}
+    price_range_analysis = comparison_data.get("price_range_analysis") or {}
+    keyword_analysis = comparison_data.get("keyword_analysis") or {}
+    
+    rows_change = comparison.get("rows_change") or {}
+    
+    # メタ情報の抽出
+    base_filename = base.get("filename", "不明")
+    base_created_at = str(base.get("created_at", "不明"))
+    base_rows = rows_change.get("base", 0)
+    
+    target_filename = target.get("filename", "不明")
+    target_created_at = str(target.get("created_at", "不明"))
+    target_rows = rows_change.get("target", 0)
+    
+    rows_diff = rows_change.get("diff", 0)
+    rows_percent = rows_change.get("percent", 0.0)
+    
+    # 1. 価格帯分析の整形
+    price_section = ""
+    if price_range_analysis:
+        base_price = price_range_analysis.get("base") or {}
+        target_price = price_range_analysis.get("target") or {}
+        changes = price_range_analysis.get("changes") or {}
+        
+        price_lines = []
+        price_lines.append("【価格帯別の案件数】")
+        
+        # 高単価案件（80万円以上）
+        high_base = base_price.get("high", 0)
+        high_target = target_price.get("high", 0)
+        high_change = changes.get("high") or {}
+        high_diff = high_change.get("diff", 0)
+        high_percent = high_change.get("percent", 0.0)
+        price_lines.append(
+            f"- 高単価案件（80万円以上）: {high_base}件 → {high_target}件 "
+            f"({high_diff:+d}件, {high_percent:+.1f}%)"
+        )
+        
+        # 中単価案件（50-80万円）
+        mid_base = base_price.get("mid", 0)
+        mid_target = target_price.get("mid", 0)
+        mid_change = changes.get("mid") or {}
+        mid_diff = mid_change.get("diff", 0)
+        mid_percent = mid_change.get("percent", 0.0)
+        price_lines.append(
+            f"- 中単価案件（50-80万円）: {mid_base}件 → {mid_target}件 "
+            f"({mid_diff:+d}件, {mid_percent:+.1f}%)"
+        )
+        
+        # 低単価案件（50万円未満）
+        low_base = base_price.get("low", 0)
+        low_target = target_price.get("low", 0)
+        low_change = changes.get("low") or {}
+        low_diff = low_change.get("diff", 0)
+        low_percent = low_change.get("percent", 0.0)
+        price_lines.append(
+            f"- 低単価案件（50万円未満）: {low_base}件 → {low_target}件 "
+            f"({low_diff:+d}件, {low_percent:+.1f}%)"
+        )
+        
+        # 不明案件
+        unknown_base = base_price.get("unknown", 0)
+        unknown_target = target_price.get("unknown", 0)
+        unknown_change = changes.get("unknown") or {}
+        unknown_diff = unknown_change.get("diff", 0)
+        unknown_percent = unknown_change.get("percent", 0.0)
+        price_lines.append(
+            f"- 価格不明案件: {unknown_base}件 → {unknown_target}件 "
+            f"({unknown_diff:+d}件, {unknown_percent:+.1f}%)"
+        )
+        
+        price_section = "\n".join(price_lines)
+    else:
+        price_section = "価格帯分析データがありません。"
+    
+    # 2. キーワード分析の整形
+    keyword_section = ""
+    if keyword_analysis:
+        keyword_lines = []
+        keyword_lines.append("【案件内容のキーワード変化】")
+        
+        # 増加キーワード（Top5）
+        increased = keyword_analysis.get("increased_keywords") or []
+        if increased:
+            keyword_lines.append("\n増加キーワード（Top5）:")
+            for kw in increased[:5]:
+                keyword_lines.append(
+                    f"  - {kw['keyword']}: {kw['base']}件 → {kw['target']}件 ({kw['diff']:+d}件)"
+                )
+        
+        # 減少キーワード（Top5）
+        decreased = keyword_analysis.get("decreased_keywords") or []
+        if decreased:
+            keyword_lines.append("\n減少キーワード（Top5）:")
+            for kw in decreased[:5]:
+                keyword_lines.append(
+                    f"  - {kw['keyword']}: {kw['base']}件 → {kw['target']}件 ({kw['diff']:+d}件)"
+                )
+        
+        # 新規出現キーワード
+        new_keywords = keyword_analysis.get("new_keywords") or []
+        if new_keywords:
+            keyword_lines.append(f"\n新規出現キーワード: {', '.join(new_keywords[:10])}")
+        
+        # 消失キーワード
+        disappeared = keyword_analysis.get("disappeared_keywords") or []
+        if disappeared:
+            keyword_lines.append(f"\n消失キーワード: {', '.join(disappeared[:10])}")
+        
+        keyword_section = "\n".join(keyword_lines)
+    else:
+        keyword_section = "キーワード分析データがありません。"
+    
+    # 3. プロンプトの構築
+    instructions = (
+        "あなたはフリーランスエンジニア市場のビジネスアナリストです。\n"
+        "以下の2つのデータセットの比較結果を分析し、**ビジネス的に価値のある示唆**を提供してください。\n"
+        "\n"
+        f"【基準データ】\n"
+        f"ファイル名: {base_filename}\n"
+        f"作成日時: {base_created_at}\n"
+        f"案件数: {base_rows}件\n"
+        "\n"
+        f"【比較対象データ】\n"
+        f"ファイル名: {target_filename}\n"
+        f"作成日時: {target_created_at}\n"
+        f"案件数: {target_rows}件\n"
+        f"案件数の変化: {rows_diff:+d}件 ({rows_percent:+.1f}%)\n"
+        "\n"
+        f"{price_section}\n"
+        "\n"
+        f"{keyword_section}\n"
+        "\n"
+        "分析の指針:\n"
+        "- **ビジネス視点**: 価格帯の変化、技術トレンドの変化から市場動向を読み取る\n"
+        "- **アクション指向**: フリーランスエンジニアが「次に何をすべきか」を提案する\n"
+        "- **根拠の明確化**: データに基づく分析と推測を区別する\n"
+        "- **技術トレンド**: 増加/減少キーワードから技術の需要変化を分析する\n"
+        "\n"
+        "出力フォーマット（必ずこの順で、各セクションを含める）:\n"
+        "\n"
+        "## ビジネス動向サマリー\n"
+        "[1-2文で全体像を述べる。価格帯とキーワードの変化から見える市場のトレンド]\n"
+        "\n"
+        "## 価格動向\n"
+        "[高/中/低単価案件の変化を分析。ビジネス的な示唆を述べる]\n"
+        "- 高単価案件の増減とその意味\n"
+        "- 中単価案件の増減とその意味\n"
+        "- 低単価案件の増減とその意味\n"
+        "- 価格動向から読み取れる市場の変化\n"
+        "\n"
+        "## 案件内容のトレンド\n"
+        "[キーワードの増減から技術トレンドを分析]\n"
+        "- 増加している技術・分野とその背景\n"
+        "- 減少している技術・分野とその背景\n"
+        "- 新規出現したキーワードの意味\n"
+        "- 技術トレンドの今後の予測\n"
+        "\n"
+        "## 推奨アクション\n"
+        "[フリーランスエンジニアが取るべき具体的なアクション3-5つ]\n"
+        "- スキル強化の優先順位\n"
+        "- 注目すべき技術領域\n"
+        "- 避けるべきリスク\n"
+        "\n"
+        "## 前提・限界\n"
+        "[この分析の前提条件、注意点、限界を明記]\n"
+        "- データの期間や件数に関する注意点\n"
+        "- 推測と事実の区別\n"
+        "- より詳細な分析に必要な情報\n"
+    )
+    
+    return instructions
+
+
 def generate_comparison_template_analysis(comparison_data: dict) -> dict:
     """
     目的: LLMなしで比較結果から簡易要約を生成する（E-0-3、テスト用）
@@ -435,18 +632,27 @@ def generate_comparison_template_analysis(comparison_data: dict) -> dict:
     return {"generated_at": generated_at, "analysis_text": "\n".join(lines)}
 
 
-def generate_comparison_analysis_text(comparison_data: dict, llm: LLMClient) -> str:
+def generate_comparison_analysis_text(
+    comparison_data: dict, 
+    llm: LLMClient,
+    version: str = "v1"
+) -> str:
     """
-    目的: 比較結果からLLMによる推移分析テキストを生成する（E-0-3）
+    目的: 比較結果からLLMによる推移分析テキストを生成する（E-0-3, E-2-2-1-3）
     
     Args:
         comparison_data: compareDatasets() の返り値
         llm: LLMクライアント
+        version: プロンプトバージョン ("v1" or "v2")
     
     Returns:
         LLM生成の分析テキスト
     """
-    prompt = build_comparison_prompt_v1(comparison_data)
+    if version == "v2":
+        prompt = build_comparison_prompt_v2(comparison_data)
+    else:
+        prompt = build_comparison_prompt_v1(comparison_data)
+    
     return llm.generate(prompt)
 
 
